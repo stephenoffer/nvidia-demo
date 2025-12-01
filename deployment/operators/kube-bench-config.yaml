@@ -1,0 +1,20 @@
+# Kube-bench Configuration for Security Testing
+# Replaces custom security testing with kube-bench
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-bench-config
+  namespace: security
+data:
+  # Kube-bench for CIS Kubernetes Benchmark testing
+  # Install: https://github.com/aquasecurity/kube-bench
+  
+  # Run security tests:
+  # kubectl run kube-bench --image=aquasec/kube-bench:latest --restart=Never -- -c master
+  
+  # Check compliance:
+  # kubectl logs kube-bench
+  
+  note: "Use kube-bench for security compliance testing"
+

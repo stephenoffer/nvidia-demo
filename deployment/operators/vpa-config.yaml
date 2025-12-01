@@ -1,0 +1,27 @@
+# Vertical Pod Autoscaler Configuration
+# Replaces custom resource management with VPA
+
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: multimodal-pipeline-vpa
+  namespace: pipeline-production
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: multimodal-pipeline
+  updatePolicy:
+    updateMode: "Auto"  # or "Off", "Initial", "Recreate"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: pipeline
+      minAllowed:
+        cpu: 4
+        memory: 8Gi
+      maxAllowed:
+        cpu: 64
+        memory: 128Gi
+      controlledResources: ["cpu", "memory"]
+      controlledValues: RequestsAndLimits
+

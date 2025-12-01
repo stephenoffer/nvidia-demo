@@ -1,0 +1,138 @@
+# Prometheus alerting rules for pipeline monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pipeline-alerts
+  labels:
+    app: multimodal-pipeline
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: pipeline.rules
+    interval: 30s
+    rules:
+    # Pipeline health alerts
+    - alert: PipelineUnhealthy
+      expr: pipeline_health_status{status="unhealthy"} == 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pipeline is unhealthy"
+        description: "Pipeline health check failed for {{ $labels.instance }}"
+    
+    - alert: PipelineDown
+      expr: up{job="multimodal-pipeline"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pipeline is down"
+        description: "Pipeline {{ $labels.instance }} is not responding"
+    
+    # Ray cluster alerts
+    - alert: RayClusterUnhealthy
+      expr: ray_cluster_healthy == 0
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Ray cluster is unhealthy"
+        description: "Ray cluster health check failed"
+    
+    - alert: RayClusterLowResources
+      expr: ray_cluster_available_resources / ray_cluster_total_resources < 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Ray cluster running low on resources"
+        description: "Ray cluster has less than 10% resources available"
+    
+    # GPU alerts
+    - alert: GPUUnavailable
+      expr: gpu_available == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "GPU unavailable"
+        description: "GPU {{ $labels.device_id }} is not available"
+    
+    - alert: GPUTemperatureHigh
+      expr: gpu_temperature > 85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "GPU temperature high"
+        description: "GPU {{ $labels.device_id }} temperature is {{ $value }}°C"
+    
+    - alert: GPUMemoryHigh
+      expr: gpu_memory_usage_percent > 95
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "GPU memory usage high"
+        description: "GPU {{ $labels.device_id }} memory usage is {{ $value }}%"
+    
+    # Pipeline performance alerts
+    - alert: PipelineThroughputLow
+      expr: rate(pipeline_items_processed_total[5m]) < 1000
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pipeline throughput is low"
+        description: "Pipeline processing rate is {{ $value }} items/sec"
+    
+    - alert: PipelineErrorRateHigh
+      expr: rate(pipeline_errors_total[5m]) / rate(pipeline_items_processed_total[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pipeline error rate is high"
+        description: "Pipeline error rate is {{ $value | humanizePercentage }}"
+    
+    # Resource alerts
+    - alert: PodMemoryHigh
+      expr: container_memory_usage_bytes{pod=~"multimodal-pipeline.*"} / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod memory usage high"
+        description: "Pod {{ $labels.pod }} memory usage is {{ $value | humanizePercentage }}"
+    
+    - alert: PodCPUHigh
+      expr: rate(container_cpu_usage_seconds_total{pod=~"multimodal-pipeline.*"}[5m]) > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod CPU usage high"
+        description: "Pod {{ $labels.pod }} CPU usage is {{ $value | humanizePercentage }}"
+    
+    # Deduplication alerts
+    - alert: DeduplicationSlow
+      expr: histogram_quantile(0.95, rate(dedup_duration_seconds_bucket[5m])) > 60
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Deduplication is slow"
+        description: "95th percentile deduplication time is {{ $value }}s"
+    
+    # Data quality alerts
+    - alert: DataQualityLow
+      expr: avg(pipeline_data_quality_score) < 0.7
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Data quality is low"
+        description: "Average data quality score is {{ $value }}"
+

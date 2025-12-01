@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pipeline-service-monitor
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: multimodal-pipeline
+  endpoints:
+  - port: prometheus-metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+    scheme: http
+    honorLabels: true
+  namespaceSelector:
+    matchNames:
+    - pipeline-production
+

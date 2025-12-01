@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multimodal-pipeline-config
+data:
+  config.yaml: |
+    input_paths:
+      - "s3://bucket/videos/"
+      - "s3://bucket/text/"
+    output_path: "s3://bucket/curated/"
+    enable_gpu_dedup: true
+    num_gpus: 8
+    streaming: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multimodal-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multimodal-pipeline
+  template:
+    metadata:
+      labels:
+        app: multimodal-pipeline
+    spec:
+      containers:
+      - name: pipeline
+        image: multimodal-pipeline:latest
+        resources:
+          requests:
+            memory: "32Gi"
+            cpu: "16"
+            nvidia.com/gpu: "8"
+          limits:
+            memory: "64Gi"
+            cpu: "32"
+            nvidia.com/gpu: "8"
+        env:
+        - name: RAY_ADDRESS
+          value: "ray://ray-head-service:10001"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+      volumes:
+      - name: config
+        configMap:
+          name: multimodal-pipeline-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ray-head-service
+spec:
+  selector:
+    app: ray-head
+  ports:
+  - port: 10001
+    targetPort: 10001
+---
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: multimodal-pipeline-cluster
+spec:
+  rayVersion: '2.10.0'
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.10.0
+          resources:
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+  workerGroupSpecs:
+  - replicas: 4
+    minReplicas: 2
+    maxReplicas: 10
+    groupName: gpu-workers
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.10.0
+          resources:
+            requests:
+              nvidia.com/gpu: "2"
+            limits:
+              nvidia.com/gpu: "2"
+              cpu: "8"
+              memory: "32Gi"
+

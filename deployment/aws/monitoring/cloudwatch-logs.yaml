@@ -1,0 +1,286 @@
+# CloudWatch Logs Integration for AWS EKS
+# Uses Fluent Bit DaemonSet to ship logs to CloudWatch
+# Requires: IRSA configured for fluent-bit service account
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: amazon-cloudwatch
+  labels:
+    name: amazon-cloudwatch
+    app: fluent-bit
+---
+# Service Account for Fluent Bit with IRSA
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluent-bit
+  namespace: amazon-cloudwatch
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/fluent-bit-cloudwatch-role
+  labels:
+    k8s-app: fluent-bit
+---
+# ConfigMap for Fluent Bit configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: amazon-cloudwatch
+  labels:
+    k8s-app: fluent-bit
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         1
+        Log_Level     info
+        Daemon        off
+        Parsers_File  parsers.conf
+        HTTP_Server   On
+        HTTP_Listen   0.0.0.0
+        HTTP_Port     2020
+        Health_Check On
+        Health_Check_HTTP_Status 200
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*.log
+        Parser            docker
+        Tag               kube.*
+        Refresh_Interval  5
+        Mem_Buf_Limit     50MB
+        Skip_Long_Lines   On
+        Skip_Empty_Lines  On
+        DB                /var/log/flb_kube.db
+        DB.locking        true
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*pipeline*.log
+        Parser            docker
+        Tag               pipeline.*
+        Refresh_Interval  5
+        Mem_Buf_Limit     50MB
+        Skip_Long_Lines   On
+        Skip_Empty_Lines  On
+        DB                /var/log/flb_pipeline.db
+        DB.locking        true
+
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Kube_URL            https://kubernetes.default.svc:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Kube_Tag_Prefix     kube.var.log.containers.
+        Merge_Log           On
+        Keep_Log            Off
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude  Off
+        Annotations         Off
+        Labels              On
+
+    [FILTER]
+        Name                kubernetes
+        Match               pipeline.*
+        Kube_URL            https://kubernetes.default.svc:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Kube_Tag_Prefix     pipeline.var.log.containers.
+        Merge_Log           On
+        Keep_Log            Off
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude  Off
+        Annotations         Off
+        Labels              On
+
+    [FILTER]
+        Name                modify
+        Match               pipeline.*
+        Add                 environment production
+        Add                 application multimodal-pipeline
+
+    [OUTPUT]
+        Name                cloudwatch_logs
+        Match               pipeline.*
+        region              us-east-1
+        log_group_name      /aws/eks/pipeline-production
+        log_stream_prefix   pipeline-
+        auto_create_group   true
+        retry_limit         5
+        auto_retry_requests true
+        log_key             log
+        log_format          json/emitter
+        store_file_limit    2000
+        store_file_ttl      24h
+
+    [OUTPUT]
+        Name                cloudwatch_logs
+        Match               kube.*
+        region              us-east-1
+        log_group_name      /aws/eks/cluster-logs
+        log_stream_prefix   kube-
+        auto_create_group   true
+        retry_limit         5
+        auto_retry_requests true
+        log_key             log
+        log_format          json/emitter
+        store_file_limit    2000
+        store_file_ttl      24h
+
+  parsers.conf: |
+    [PARSER]
+        Name        docker
+        Format      json
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L
+        Time_Keep   On
+        Decode_Field_As    escaped_utf8    log    do_next
+        Decode_Field_As    json            log
+
+    [PARSER]
+        Name        kubernetes
+        Format      json
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L
+        Time_Keep   On
+---
+# DaemonSet for Fluent Bit
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: amazon-cloudwatch
+  labels:
+    k8s-app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      k8s-app: fluent-bit
+  template:
+    metadata:
+      labels:
+        k8s-app: fluent-bit
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2020"
+        prometheus.io/path: "/api/v1/metrics/prometheus"
+    spec:
+      serviceAccountName: fluent-bit
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: fluent-bit
+        image: amazon/aws-for-fluent-bit:2.32.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - CHOWN
+            - DAC_OVERRIDE
+            - FOWNER
+            - FSETID
+            - SETGID
+            - SETUID
+            - SETPCAP
+            - NET_BIND_SERVICE
+            - NET_RAW
+            - SYS_CHROOT
+            - KILL
+            - AUDIT_WRITE
+        resources:
+          limits:
+            memory: 500Mi
+            cpu: 500m
+          requests:
+            memory: 200Mi
+            cpu: 100m
+        env:
+        - name: AWS_REGION
+          value: us-east-1
+        - name: FLUENT_BIT_LOG_LEVEL
+          value: "info"
+        volumeMounts:
+        - name: fluent-bit-config
+          mountPath: /fluent-bit/etc/
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        - name: runlogjournal
+          mountPath: /run/log/journal
+          readOnly: true
+        - name: dmesg
+          mountPath: /var/log/dmesg
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 2020
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 2020
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: fluent-bit-config
+        configMap:
+          name: fluent-bit-config
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: runlogjournal
+        hostPath:
+          path: /run/log/journal
+      - name: dmesg
+        hostPath:
+          path: /var/log/dmesg
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      - operator: Exists
+        effect: NoExecute
+      nodeSelector:
+        kubernetes.io/os: linux
+---
+# Service for Fluent Bit metrics
+apiVersion: v1
+kind: Service
+metadata:
+  name: fluent-bit
+  namespace: amazon-cloudwatch
+  labels:
+    k8s-app: fluent-bit
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "2020"
+    prometheus.io/path: "/api/v1/metrics/prometheus"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 2020
+    targetPort: 2020
+    protocol: TCP
+    name: http
+  selector:
+    k8s-app: fluent-bit
+

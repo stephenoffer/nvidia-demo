@@ -1,0 +1,19 @@
+apiVersion: v2
+name: multimodal-pipeline
+description: A Helm chart for multimodal data pipeline
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ray
+  - data
+  - robotics
+  - multimodal
+  - etl
+  - gpu
+maintainers:
+  - name: NVIDIA Demo Team
+    email: demo@nvidia.com
+sources:
+  - https://github.com/your-org/nvidia-demo
+

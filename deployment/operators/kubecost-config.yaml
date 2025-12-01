@@ -1,0 +1,36 @@
+# Kubecost Configuration for Cost Management
+# Replaces custom cost tracking with Kubecost
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubecost-config
+  namespace: kubecost
+data:
+  # Kubecost provides:
+  # - Cost allocation by namespace, pod, label
+  # - Resource efficiency recommendations
+  # - Cost alerts
+  # - Multi-cloud cost visibility
+  
+  # Install via Helm:
+  # helm install kubecost kubecost/cost-analyzer \
+  #   --namespace kubecost \
+  #   --create-namespace \
+  #   --set kubecostProductConfigs.clusterName=multimodal-pipeline-cluster
+---
+# Cost Allocation Labels
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cost-allocation-labels
+  namespace: pipeline-production
+data:
+  # Add labels for cost allocation:
+  # cost-center: pipeline
+  # team: ml-platform
+  # project: groot-data-etl
+  # environment: production
+  
+  note: "Add labels to all resources for cost tracking"
+

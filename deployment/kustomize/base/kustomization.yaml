@@ -1,0 +1,16 @@
+# Kustomize base configuration
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../kubernetes-production.yaml
+  - ../../network-policy.yaml
+  - ../../resource-quota.yaml
+  - ../../priority-class.yaml
+  - ../../prometheus-service-monitor.yaml
+  - ../../prometheus-alerts.yaml
+
+commonLabels:
+  app: multimodal-pipeline
+  managed-by: kustomize
+

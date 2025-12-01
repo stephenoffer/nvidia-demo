@@ -1,0 +1,47 @@
+# HashiCorp Vault Integration for On-Premises
+# Uses External Secrets Operator to sync secrets from Vault
+
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: pipeline-vault-secrets
+  namespace: pipeline-production
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: pipeline-secrets
+    creationPolicy: Owner
+    template:
+      type: Opaque
+  data:
+  - secretKey: database-password
+    remoteRef:
+      key: pipeline/database
+      property: password
+  - secretKey: api-key
+    remoteRef:
+      key: pipeline/api-credentials
+      property: api-key
+---
+# SecretStore for Vault
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: vault-backend
+  namespace: pipeline-production
+spec:
+  provider:
+    vault:
+      server: "https://vault.example.com:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "pipeline-role"
+          serviceAccountRef:
+            name: external-secrets-sa
+

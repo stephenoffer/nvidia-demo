@@ -1,0 +1,217 @@
+# Backup and Restore Configuration for AWS EKS
+# Uses Velero for backup/restore operations
+# Requires: Velero installed, S3 bucket created, IAM permissions configured
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: velero
+  labels:
+    name: velero
+    app: velero
+---
+# Service Account for Velero with IRSA
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: velero
+  namespace: velero
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/velero-backup-role
+  labels:
+    app: velero
+---
+# Velero BackupStorageLocation for S3
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: aws-s3-backup
+  namespace: velero
+  labels:
+    app: velero
+spec:
+  provider: aws
+  objectStorage:
+    bucket: pipeline-backups-production
+    prefix: velero
+  config:
+    region: us-east-1
+    s3ForcePathStyle: "false"
+    s3Url: ""  # Use default AWS endpoint
+  credential:
+    name: cloud-credentials
+    key: cloud
+  default: true
+---
+# Velero VolumeSnapshotLocation for EBS
+apiVersion: velero.io/v1
+kind: VolumeSnapshotLocation
+metadata:
+  name: aws-ebs-snapshot
+  namespace: velero
+  labels:
+    app: velero
+spec:
+  provider: aws
+  config:
+    region: us-east-1
+  default: true
+---
+# Velero backup schedule - daily backups
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: pipeline-daily-backup
+  namespace: velero
+  labels:
+    app: velero
+    backup-type: daily
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  template:
+    includedNamespaces:
+    - pipeline-production
+    includedResources:
+    - "*"
+    excludedResources:
+    - events
+    - events.events.k8s.io
+    - nodes
+    - pods/status
+    - pods/log
+    labelSelector:
+      matchLabels:
+        backup: "true"
+    snapshotVolumes: true
+    ttl: 720h0m0s  # 30 days
+    storageLocation: aws-s3-backup
+    volumeSnapshotLocations:
+    - aws-ebs-snapshot
+    metadata:
+      labels:
+        backup-type: daily
+        environment: production
+---
+# Velero backup schedule - weekly full backups
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: pipeline-weekly-backup
+  namespace: velero
+  labels:
+    app: velero
+    backup-type: weekly
+spec:
+  schedule: "0 3 * * 0"  # Weekly on Sunday at 3 AM UTC
+  template:
+    includedNamespaces:
+    - pipeline-production
+    includedResources:
+    - "*"
+    excludedResources:
+    - events
+    - events.events.k8s.io
+    - nodes
+    - pods/status
+    - pods/log
+    snapshotVolumes: true
+    ttl: 2160h0m0s  # 90 days
+    storageLocation: aws-s3-backup
+    volumeSnapshotLocations:
+    - aws-ebs-snapshot
+    metadata:
+      labels:
+        backup-type: weekly
+        environment: production
+---
+# Velero backup schedule - pre-upgrade backups
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: pipeline-pre-upgrade-backup
+  namespace: velero
+  labels:
+    app: velero
+    backup-type: pre-upgrade
+spec:
+  schedule: ""  # Manual trigger only
+  template:
+    includedNamespaces:
+    - pipeline-production
+    includedResources:
+    - "*"
+    excludedResources:
+    - events
+    - events.events.k8s.io
+    snapshotVolumes: true
+    ttl: 168h0m0s  # 7 days
+    storageLocation: aws-s3-backup
+    volumeSnapshotLocations:
+    - aws-ebs-snapshot
+    metadata:
+      labels:
+        backup-type: pre-upgrade
+        environment: production
+---
+# ConfigMap with backup validation script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-backup-config
+  namespace: velero
+  labels:
+    app: velero
+data:
+  backup-validation.sh: |
+    #!/bin/bash
+    # Backup validation script
+    # Checks backup integrity and completeness
+    
+    set -euo pipefail
+    
+    BACKUP_NAME="${1:-}"
+    if [ -z "$BACKUP_NAME" ]; then
+      echo "Usage: $0 <backup-name>"
+      exit 1
+    fi
+    
+    echo "Validating backup: $BACKUP_NAME"
+    
+    # Check backup status
+    velero backup describe "$BACKUP_NAME" --details
+    
+    # Verify backup exists in S3
+    # This requires AWS CLI access
+    # aws s3 ls s3://pipeline-backups-production/velero/backups/$BACKUP_NAME/
+    
+    echo "Backup validation complete"
+  restore-test.sh: |
+    #!/bin/bash
+    # Restore test script
+    # Tests restore to a test namespace
+    
+    set -euo pipefail
+    
+    BACKUP_NAME="${1:-}"
+    TEST_NAMESPACE="${2:-pipeline-test-restore}"
+    
+    if [ -z "$BACKUP_NAME" ]; then
+      echo "Usage: $0 <backup-name> [test-namespace]"
+      exit 1
+    fi
+    
+    echo "Testing restore from backup: $BACKUP_NAME"
+    echo "Test namespace: $TEST_NAMESPACE"
+    
+    # Create test namespace
+    kubectl create namespace "$TEST_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+    
+    # Perform restore
+    velero restore create "test-restore-$(date +%s)" \
+      --from-backup "$BACKUP_NAME" \
+      --namespace-mapping pipeline-production:"$TEST_NAMESPACE" \
+      --wait
+    
+    echo "Restore test complete"
+    echo "Clean up test namespace: kubectl delete namespace $TEST_NAMESPACE"
+

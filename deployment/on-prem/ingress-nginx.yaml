@@ -1,0 +1,43 @@
+# NGINX Ingress Controller Configuration for On-Premises
+# Requires NGINX Ingress Controller installed
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multimodal-pipeline-ingress
+  namespace: pipeline-production
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Forwarded-Proto: $scheme";
+      more_set_headers "X-Real-IP: $remote_addr";
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    # CORS (if needed)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range"
+spec:
+  tls:
+  - hosts:
+    - pipeline.example.com
+    secretName: pipeline-tls-secret
+  rules:
+  - host: pipeline.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: multimodal-pipeline-service
+            port:
+              number: 8080
+

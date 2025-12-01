@@ -1,0 +1,58 @@
+# ArgoCD Application - Replaces custom deployment scripts
+# GitOps deployment using ArgoCD
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: multimodal-pipeline
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/nvidia-demo.git
+    targetRevision: main
+    path: deployment/kustomize/production
+    helm:
+      valueFiles:
+      - values-production.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pipeline-production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+---
+# ArgoCD Application for Ray Cluster
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ray-cluster
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/nvidia-demo.git
+    targetRevision: main
+    path: deployment/aws/kuberay/ray-cluster-eks.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pipeline-production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+

@@ -1,0 +1,364 @@
+# Ray Cluster Configuration for AWS EKS
+# Uses Ray Operator for Kubernetes
+# Requires: Ray Operator installed, NVIDIA GPU device plugin, IRSA configured
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pipeline-production
+  labels:
+    name: pipeline-production
+    environment: production
+    cloud-provider: aws
+---
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: multimodal-pipeline-cluster
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+    component: ray-cluster
+spec:
+  rayVersion: '2.10.0'
+  enableInTreeAutoscaling: true
+  autoscalerOptions:
+    upscalingMode: Aggressive
+    idleTimeoutSeconds: 60
+    imagePullPolicy: IfNotPresent
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+      num-cpus: '4'
+      object-store-memory: '2000000000'  # 2GB
+      redis-password: ''  # Should use secret in production
+    template:
+      metadata:
+        labels:
+          ray.io/node-type: head
+          app: multimodal-pipeline
+      spec:
+        serviceAccountName: multimodal-pipeline-sa
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          fsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.10.0-gpu
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+            protocol: TCP
+          - containerPort: 8265
+            name: dashboard
+            protocol: TCP
+          - containerPort: 10001
+            name: client
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "4"
+              memory: 8Gi
+            requests:
+              cpu: "2"
+              memory: 4Gi
+          env:
+          - name: RAY_DISABLE_IMPORT_WARNING
+            value: "1"
+          - name: AWS_REGION
+            valueFrom:
+              configMapKeyRef:
+                name: multimodal-pipeline-config
+                key: aws-region
+                optional: true
+          - name: AWS_DEFAULT_REGION
+            valueFrom:
+              configMapKeyRef:
+                name: multimodal-pipeline-config
+                key: aws-region
+                optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+          livenessProbe:
+            httpGet:
+              path: /api/ray/health
+              port: 8265
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/ray/health
+              port: 8265
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+        nodeSelector:
+          kubernetes.io/arch: amd64
+        tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+          effect: NoSchedule
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                  - key: ray.io/node-type
+                    operator: In
+                    values:
+                    - head
+                topologyKey: kubernetes.io/hostname
+  workerGroupSpecs:
+  - replicas: 4
+    minReplicas: 2
+    maxReplicas: 20
+    groupName: gpu-workers
+    rayStartParams:
+      num-cpus: '8'
+      num-gpus: '2'
+      object-store-memory: '8000000000'  # 8GB
+    template:
+      metadata:
+        labels:
+          ray.io/node-type: worker
+          ray.io/group: gpu-workers
+          app: multimodal-pipeline
+      spec:
+        serviceAccountName: multimodal-pipeline-sa
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          fsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.10.0-gpu
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              nvidia.com/gpu: "2"
+              cpu: "8"
+              memory: 32Gi
+            limits:
+              nvidia.com/gpu: "2"
+              cpu: "16"
+              memory: 64Gi
+          env:
+          - name: RAY_DISABLE_IMPORT_WARNING
+            value: "1"
+          - name: AWS_REGION
+            valueFrom:
+              configMapKeyRef:
+                name: multimodal-pipeline-config
+                key: aws-region
+                optional: true
+          - name: AWS_DEFAULT_REGION
+            valueFrom:
+              configMapKeyRef:
+                name: multimodal-pipeline-config
+                key: aws-region
+                optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+          livenessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "ray health-check || exit 1"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "ray health-check || exit 1"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+        nodeSelector:
+          accelerator: nvidia-gpu
+          node.kubernetes.io/instance-type: g5.2xlarge
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                  - key: ray.io/group
+                    operator: In
+                    values:
+                    - gpu-workers
+                topologyKey: kubernetes.io/hostname
+  - replicas: 8
+    minReplicas: 4
+    maxReplicas: 32
+    groupName: cpu-workers
+    rayStartParams:
+      num-cpus: '4'
+      object-store-memory: '4000000000'  # 4GB
+    template:
+      metadata:
+        labels:
+          ray.io/node-type: worker
+          ray.io/group: cpu-workers
+          app: multimodal-pipeline
+      spec:
+        serviceAccountName: multimodal-pipeline-sa
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          fsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.10.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              cpu: "8"
+              memory: 16Gi
+          env:
+          - name: RAY_DISABLE_IMPORT_WARNING
+            value: "1"
+          - name: AWS_REGION
+            valueFrom:
+              configMapKeyRef:
+                name: multimodal-pipeline-config
+                key: aws-region
+                optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+          livenessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "ray health-check || exit 1"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "ray health-check || exit 1"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+        nodeSelector:
+          workload-type: cpu
+        tolerations:
+        - key: spot-instance
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                  - key: ray.io/group
+                    operator: In
+                    values:
+                    - cpu-workers
+                topologyKey: kubernetes.io/hostname
+---
+# Service for Ray Head
+apiVersion: v1
+kind: Service
+metadata:
+  name: ray-head-service
+  namespace: pipeline-production
+  labels:
+    app: ray-head
+    component: ray-cluster
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 10001
+    targetPort: 10001
+    name: client
+    protocol: TCP
+  - port: 8265
+    targetPort: 8265
+    name: dashboard
+    protocol: TCP
+  - port: 6379
+    targetPort: 6379
+    name: gcs-server
+    protocol: TCP
+  selector:
+    ray.io/node-type: head
+    ray.io/cluster: multimodal-pipeline-cluster
+---
+# Pod Disruption Budget for Ray Head
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ray-head-pdb
+  namespace: pipeline-production
+  labels:
+    app: ray-head
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      ray.io/node-type: head
+      ray.io/cluster: multimodal-pipeline-cluster
+---
+# Pod Disruption Budget for Ray Workers
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ray-workers-pdb
+  namespace: pipeline-production
+  labels:
+    app: ray-workers
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      ray.io/node-type: worker
+      ray.io/cluster: multimodal-pipeline-cluster
+

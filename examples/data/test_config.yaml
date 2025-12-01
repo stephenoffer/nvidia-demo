@@ -1,0 +1,18 @@
+joints:
+- limits:
+  - 0
+  - 3.14
+  name: joint1
+  type: revolute
+- limits:
+  - -1.57
+  - 1.57
+  name: joint2
+  type: revolute
+robot_name: test_robot
+sensors:
+  camera:
+    fps: 30
+    resolution:
+    - 640
+    - 480

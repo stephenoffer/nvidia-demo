@@ -1,0 +1,76 @@
+# Grafana Operator Configuration
+# Replaces custom dashboard generation with Grafana Operator
+
+apiVersion: integreatly.org/v1alpha1
+kind: Grafana
+metadata:
+  name: pipeline-grafana
+  namespace: monitoring
+spec:
+  config:
+    auth:
+      disable_login_form: false
+    security:
+      admin_user: admin
+      admin_password: admin
+    datasources:
+      datasources.yaml:
+        apiVersion: 1
+        datasources:
+        - name: Prometheus
+          type: prometheus
+          access: proxy
+          url: http://pipeline-prometheus:9090
+          isDefault: true
+  dashboardLabelSelector:
+  - matchExpressions:
+    - key: app
+      operator: In
+      values:
+      - multimodal-pipeline
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+    - grafana.example.com
+    tls:
+    - secretName: grafana-tls
+      hosts:
+      - grafana.example.com
+---
+# Grafana Dashboard as Code - Replaces custom dashboard generation
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: pipeline-dashboard
+  namespace: monitoring
+  labels:
+    app: multimodal-pipeline
+spec:
+  json: |
+    {
+      "dashboard": {
+        "title": "Multimodal Pipeline Dashboard",
+        "panels": [
+          {
+            "title": "Pipeline Throughput",
+            "targets": [
+              {
+                "expr": "rate(pipeline_items_processed_total[5m])",
+                "legendFormat": "Items/sec"
+              }
+            ]
+          },
+          {
+            "title": "GPU Utilization",
+            "targets": [
+              {
+                "expr": "gpu_utilization_percent",
+                "legendFormat": "GPU {{gpu}}"
+              }
+            ]
+          }
+        ]
+      }
+    }
+

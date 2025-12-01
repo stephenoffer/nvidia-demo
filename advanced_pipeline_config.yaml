@@ -1,0 +1,26 @@
+sources:
+- type: parquet
+  path: /Users/stephen.offer/Desktop/dev/nvidia-demo/examples/data/parquet/mock_data.parquet
+- type: groot
+  path: /Users/stephen.offer/Desktop/dev/nvidia-demo/examples/data
+- type: hdf5
+  path: /Users/stephen.offer/Desktop/dev/nvidia-demo/examples/data/test_data.h5
+- type: pointcloud
+  path: /Users/stephen.offer/Desktop/dev/nvidia-demo/examples/data/test_pointcloud.pcd
+- type: numpy
+  path: /Users/stephen.offer/Desktop/dev/nvidia-demo/examples/data/numpy
+- type: video
+  path: s3://anonymous@ray-example-data/basketball.mp4
+  extract_frames: true
+  frame_rate: 30
+  max_frames: 100
+output: /Users/stephen.offer/Desktop/dev/nvidia-demo/examples/test_output/curated
+enable_gpu: false
+num_gpus: 0
+compute_mode: cpu
+num_cpus: 4
+batch_size: 128
+streaming: true
+dedup_method: fuzzy
+similarity_threshold: 0.95
+checkpoint_interval: 1000

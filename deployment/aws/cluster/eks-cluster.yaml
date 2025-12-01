@@ -1,0 +1,547 @@
+# AWS EKS Cluster Configuration
+# For deploying on AWS EKS (Elastic Kubernetes Service)
+# Requires: EKS cluster, EBS CSI driver, EFS CSI driver (optional), IRSA configured
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pipeline-production
+  labels:
+    name: pipeline-production
+    environment: production
+    cloud-provider: aws
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# Resource Quota for namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: pipeline-production-quota
+  namespace: pipeline-production
+spec:
+  hard:
+    requests.cpu: "200"
+    requests.memory: 400Gi
+    requests.nvidia.com/gpu: "32"
+    limits.cpu: "400"
+    limits.memory: 800Gi
+    limits.nvidia.com/gpu: "32"
+    persistentvolumeclaims: "10"
+    requests.storage: "2Ti"
+---
+# Limit Range for default resource limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pipeline-production-limits
+  namespace: pipeline-production
+spec:
+  limits:
+  - default:
+      cpu: "2"
+      memory: 4Gi
+    defaultRequest:
+      cpu: "100m"
+      memory: 128Mi
+    type: Container
+  - max:
+      cpu: "64"
+      memory: 128Gi
+      nvidia.com/gpu: "8"
+    min:
+      cpu: "100m"
+      memory: 128Mi
+    type: Container
+---
+# Service Account with IRSA (IAM Roles for Service Accounts)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: multimodal-pipeline-sa
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/multimodal-pipeline-role
+    # This annotation enables IRSA - no need for AWS credentials in secrets
+---
+# RBAC Role for service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: multimodal-pipeline-role
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+---
+# RBAC RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: multimodal-pipeline-rolebinding
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+subjects:
+- kind: ServiceAccount
+  name: multimodal-pipeline-sa
+  namespace: pipeline-production
+roleRef:
+  kind: Role
+  name: multimodal-pipeline-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Storage Class for EBS volumes (GP3 - cost-effective)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+  labels:
+    app: storage
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+  encrypted: "true"
+  kmsKeyId: ""  # Use default KMS key or specify ARN
+  allowAutoIOPSPerGBIncrease: "true"
+  iops: "3000"  # Baseline IOPS for GP3
+  throughput: "125"  # Baseline throughput (MB/s) for GP3
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+---
+# Storage Class for EBS volumes (GP3 - high performance)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3-ssd-high-iops
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+  labels:
+    app: storage
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+  encrypted: "true"
+  kmsKeyId: ""
+  allowAutoIOPSPerGBIncrease: "true"
+  iops: "16000"  # High IOPS
+  throughput: "1000"  # High throughput
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+---
+# Storage Class for EFS (for shared storage)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+  labels:
+    app: storage
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: fs-xxxxxxxxx  # Set your EFS filesystem ID
+  directoryPerms: "0755"
+  gidRangeStart: "1000"
+  gidRangeEnd: "2000"
+  basePath: "/pipeline-production"
+volumeBindingMode: Immediate
+reclaimPolicy: Retain
+allowVolumeExpansion: false
+---
+# Persistent Volume Claim for checkpoint data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pipeline-checkpoints
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+    storage-type: checkpoints
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp3-ssd
+  resources:
+    requests:
+      storage: 500Gi
+---
+# ConfigMap with AWS-specific configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multimodal-pipeline-config
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+data:
+  aws-region: "us-east-1"
+  config.yaml: |
+    # AWS-specific configuration
+    input_paths:
+      - "s3://multimodal-pipeline-data-production/input/"
+    output_path: "s3://multimodal-pipeline-data-production/output/"
+    
+    # AWS S3 settings
+    s3:
+      region: us-east-1
+      endpoint: ""  # Use default AWS endpoint
+      use_accelerate: false
+      multipart_threshold: 67108864  # 64MB
+      multipart_chunksize: 67108864  # 64MB
+      max_concurrency: 10
+    
+    # Pipeline settings
+    enable_gpu_dedup: true
+    num_gpus: 8
+    streaming: true
+    checkpoint_interval: 1000
+    checkpoint_dir: /data/checkpoints
+    
+    # AWS CloudWatch logging
+    enable_cloudwatch: true
+    cloudwatch_log_group: /aws/eks/pipeline-production
+    
+    # Performance settings optimized for AWS
+    batch_size: 1000
+    prefetch_buffer_size: 4
+---
+# Deployment with AWS optimizations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multimodal-pipeline
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+    cloud-provider: aws
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: multimodal-pipeline
+  template:
+    metadata:
+      labels:
+        app: multimodal-pipeline
+        cloud-provider: aws
+        version: v1
+        backup: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: multimodal-pipeline-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+        supplementalGroups: []
+      containers:
+      - name: pipeline
+        image: ECR_REGISTRY/multimodal-pipeline:latest  # Replace with your ECR registry
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # Set to true if app supports it
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 30
+        env:
+        # AWS region from ConfigMap
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: multimodal-pipeline-config
+              key: aws-region
+        - name: AWS_DEFAULT_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: multimodal-pipeline-config
+              key: aws-region
+        # AWS SDK will use IRSA automatically if service account is configured
+        # Fallback to credentials if IRSA not available (not recommended)
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+              optional: true
+        # Pipeline configuration
+        - name: PIPELINE_CONFIG_PATH
+          value: /app/config/config.yaml
+        - name: RAY_ADDRESS
+          value: "ray://ray-head-service.pipeline-production.svc.cluster.local:10001"
+        # CloudWatch logging
+        - name: AWS_CLOUDWATCH_LOG_GROUP
+          value: "/aws/eks/pipeline-production"
+        # Pod information
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        resources:
+          requests:
+            cpu: "16"
+            memory: 32Gi
+            nvidia.com/gpu: "8"
+          limits:
+            cpu: "32"
+            memory: 64Gi
+            nvidia.com/gpu: "8"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: checkpoints
+          mountPath: /data/checkpoints
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: multimodal-pipeline-config
+      - name: checkpoints
+        persistentVolumeClaim:
+          claimName: pipeline-checkpoints
+      - name: tmp
+        emptyDir:
+          sizeLimit: 10Gi
+      nodeSelector:
+        accelerator: nvidia-gpu
+        node.kubernetes.io/instance-type: g5.2xlarge
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - multimodal-pipeline
+              topologyKey: kubernetes.io/hostname
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: ray.io/node-type
+                  operator: In
+                  values:
+                  - head
+              topologyKey: kubernetes.io/hostname
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: multimodal-pipeline-pdb
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: multimodal-pipeline
+---
+# Service for pipeline
+apiVersion: v1
+kind: Service
+metadata:
+  name: multimodal-pipeline-service
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+    # AWS Load Balancer Controller annotations (if using NLB)
+    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"
+    # service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  selector:
+    app: multimodal-pipeline
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+---
+# Network Policy for pipeline
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: multimodal-pipeline-netpol
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: multimodal-pipeline
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Ray head
+  - from:
+    - podSelector:
+        matchLabels:
+          ray.io/node-type: head
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: aws-load-balancer-controller
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow S3 access
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow Ray head communication
+  - to:
+    - podSelector:
+        matchLabels:
+          ray.io/node-type: head
+    ports:
+    - protocol: TCP
+      port: 10001
+    - protocol: TCP
+      port: 8265
+    - protocol: TCP
+      port: 6379
+  # Allow CloudWatch Logs
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443

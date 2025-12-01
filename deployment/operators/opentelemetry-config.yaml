@@ -1,0 +1,54 @@
+# OpenTelemetry Configuration
+# Replaces custom tracing with OpenTelemetry
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opentelemetry-config
+  namespace: pipeline-production
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    
+    processors:
+      batch:
+        timeout: 10s
+      memory_limiter:
+        limit_mib: 512
+    
+    exporters:
+      jaeger:
+        endpoint: jaeger-collector.observability.svc.cluster.local:14250
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+    
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [jaeger]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus]
+---
+# OpenTelemetry Sidecar Injection
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-sidecar-config
+  namespace: pipeline-production
+data:
+  OTEL_SERVICE_NAME: multimodal-pipeline
+  OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger-collector.observability.svc.cluster.local:14250
+  OTEL_RESOURCE_ATTRIBUTES: "service.name=multimodal-pipeline,service.version=1.0.0"
+

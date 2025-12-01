@@ -1,0 +1,67 @@
+# Falco Configuration for Runtime Security
+# Replaces custom security monitoring with Falco
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-config
+  namespace: falco-system
+data:
+  falco.yaml: |
+    rules_file:
+      - /etc/falco/falco_rules.yaml
+      - /etc/falco/falco_rules.local.yaml
+      - /etc/falco/rules.d
+    
+    # Pipeline-specific rules
+    custom_rules.yaml: |
+      - rule: PipelineContainerPrivilegeEscalation
+        desc: Detect privilege escalation in pipeline containers
+        condition: >
+          container.name startswith "pipeline" and
+          evt.type = setuid and
+          evt.dir = <
+        output: >
+          Privilege escalation detected in pipeline container
+          (user=%user.name container=%container.name
+          command=%proc.cmdline)
+        priority: WARNING
+        tags: [pipeline, security]
+      
+      - rule: PipelineSuspiciousNetworkActivity
+        desc: Detect suspicious network activity from pipeline
+        condition: >
+          container.name startswith "pipeline" and
+          evt.type = connect and
+          evt.dir = > and
+          fd.sip != "10.0.0.0/8" and
+          fd.sip != "172.16.0.0/12" and
+          fd.sip != "192.168.0.0/16"
+        output: >
+          Suspicious network connection from pipeline container
+          (container=%container.name connection=%fd.name)
+        priority: WARNING
+        tags: [pipeline, security, network]
+---
+# Falco Custom Rules for Pipeline
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-pipeline-rules
+  namespace: falco-system
+data:
+  pipeline-rules.yaml: |
+    - rule: UnauthorizedFileAccess
+      desc: Detect unauthorized file access in pipeline
+      condition: >
+        container.name startswith "pipeline" and
+        evt.type = open and
+        evt.dir = < and
+        fd.name startswith "/etc" and
+        not fd.name startswith "/etc/passwd"
+      output: >
+        Unauthorized file access detected
+        (container=%container.name file=%fd.name)
+      priority: ERROR
+      tags: [pipeline, security]
+

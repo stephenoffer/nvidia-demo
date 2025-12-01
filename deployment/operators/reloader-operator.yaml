@@ -1,0 +1,21 @@
+# Reloader Operator Configuration
+# Replaces custom config reloading with Reloader Operator
+
+apiVersion: reloader.stakater.com/v1alpha1
+kind: Reloader
+metadata:
+  name: pipeline-reloader
+  namespace: pipeline-production
+spec:
+  reloadOnCreate: true
+  autoReloadAll: false
+  watchGlobally: false
+---
+# Annotation-based reloading - Replaces custom config watching
+# Add to Deployment:
+# metadata:
+#   annotations:
+#     reloader.stakater.com/auto: "true"
+#     configmap.reloader.stakater.com/reload: "multimodal-pipeline-config"
+#     secret.reloader.stakater.com/reload: "pipeline-secrets"
+

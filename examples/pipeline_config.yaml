@@ -1,0 +1,107 @@
+# Example YAML configuration for multimodal data pipeline
+# Supports declarative configuration of data sources, processing, and output
+
+sources:
+  # Example: Local mock data (recommended for testing)
+  - type: parquet
+    path: examples/data/parquet/mock_data.parquet
+
+  # Example: Public S3 video data (no credentials needed)
+  - type: video
+    path: s3://anonymous@ray-example-data/basketball.mp4
+    extract_frames: true
+    frame_rate: 30
+    max_frames: 100
+
+  # Example: NumPy arrays (local mock data)
+  - type: numpy
+    path: examples/data/numpy/
+
+  # Example: Text data (local mock data)
+  - type: text
+    path: examples/data/mock_text.txt
+
+  # Example: S3 data sources (commented out - requires credentials or data availability)
+  # Uncomment and configure if you have access to these S3 buckets:
+  # - type: video
+  #   path: s3://robotics-data/videos/
+  #   extract_frames: true
+  #   frame_rate: 30
+  #   max_frames: 1000
+  # - type: mcap
+  #   path: s3://robotics-data/rosbags/
+  #   topics:
+  #     - /camera/image_raw
+  #     - /imu/data
+  #     - /lidar/points
+  #   time_range: [0, 3600000000000]
+  #   include_metadata: true
+  # - type: rosbag
+  #   path: s3://robotics-data/ros1_bags/
+  #   topics:
+  #     - /camera/image_raw
+  #     - /odom
+  # - type: hdf5
+  #   path: s3://robotics-data/sensor_data/
+  #   datasets:
+  #     - joint_positions
+  #     - joint_velocities
+  #     - base_pose
+  # - type: pointcloud
+  #   path: s3://robotics-data/pointclouds/
+  # - type: parquet
+  #   path: s3://robotics-data/structured/
+  # - type: isaac_lab
+  #   path: s3://robotics-data/isaac_lab/
+  #   robot_type: humanoid
+  #   include_observations: true
+  #   include_actions: true
+  #   include_rewards: true
+  # - type: cosmos_dreams
+  #   path: s3://robotics-data/cosmos_dreams/
+  #   include_metadata: true
+
+# Output configuration
+output: examples/test_output/curated
+
+# GPU configuration
+# Set compute_mode to "auto" to automatically detect CPU/GPU
+# Set to "cpu" to force CPU-only mode
+# Set to "gpu" to require GPU (will fail if no GPU available)
+compute_mode: auto  # "auto", "cpu", or "gpu"
+enable_gpu: true  # Will be overridden by compute_mode if set to "cpu"
+num_gpus: 4  # Will be set to 0 if compute_mode is "cpu"
+num_cpus: 32
+
+# Processing configuration
+batch_size: 1024
+streaming: true
+checkpoint_interval: 1000
+
+# Deduplication configuration
+dedup_method: both  # 'fuzzy', 'semantic', or 'both'
+similarity_threshold: 0.95
+
+# Video processing configuration
+video_config:
+  extract_frames: true
+  frame_rate: 30
+  resolution: [224, 224]
+  max_duration: 60.0
+
+# Text processing configuration
+text_config:
+  min_length: 10
+  max_length: 4096
+  remove_boilerplate: true
+  language: en
+
+# Sensor processing configuration
+sensor_config:
+  sample_rate: 100
+  normalize: true
+  remove_outliers: true
+
+# Observability
+enable_observability: true
+

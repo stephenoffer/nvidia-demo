@@ -1,0 +1,167 @@
+# AWS Application Load Balancer Ingress
+# Requires AWS Load Balancer Controller installed in cluster
+# Requires: AWS Load Balancer Controller, ACM certificate, WAF (optional)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pipeline-production
+  labels:
+    name: pipeline-production
+    environment: production
+    cloud-provider: aws
+---
+# Ingress for internal access (preferred for production)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multimodal-pipeline-ingress-internal
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+    ingress-type: internal
+  annotations:
+    # AWS Load Balancer Controller
+    alb.ingress.kubernetes.io/load-balancer-name: multimodal-pipeline-internal
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ip-address-type: ipv4
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    # Certificate ARN - replace with actual ARN
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERT_ID
+    # Health check configuration
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+    alb.ingress.kubernetes.io/success-codes: "200"
+    # SSL/TLS policy - use modern TLS 1.2+ policy
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    # Subnet tagging for ALB placement
+    alb.ingress.kubernetes.io/subnets: subnet-xxxxx,subnet-yyyyy,subnet-zzzzz
+    # Security groups
+    alb.ingress.kubernetes.io/security-groups: sg-xxxxx
+    # Access logs
+    alb.ingress.kubernetes.io/load-balancer-attributes: |
+      access_logs.s3.enabled=true,
+      access_logs.s3.bucket=pipeline-alb-logs,
+      access_logs.s3.prefix=pipeline-production/internal,
+      idle_timeout.timeout_seconds=60,
+      deletion_protection.enabled=true,
+      routing.http.drop_invalid_header_fields.enabled=true,
+      routing.http.xff_header_processing.mode=preserve,
+      routing.http.xff_client_port.enabled=true
+    # Target group attributes
+    alb.ingress.kubernetes.io/target-group-attributes: |
+      stickiness.enabled=true,
+      stickiness.lb_cookie.duration_seconds=86400,
+      deregistration_delay.timeout_seconds=30,
+      slow_start.duration_seconds=30
+    # WAF integration (optional but recommended)
+    # alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:REGION:ACCOUNT_ID:regional/webacl/NAME/ID
+    # Tags
+    alb.ingress.kubernetes.io/tags: |
+      Environment=production,
+      Application=multimodal-pipeline,
+      ManagedBy=kubernetes
+spec:
+  ingressClassName: alb
+  rules:
+  - host: pipeline.internal.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: multimodal-pipeline-service
+            port:
+              number: 8080
+---
+# Ingress for external access (if needed)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multimodal-pipeline-ingress-external
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+    ingress-type: external
+  annotations:
+    # AWS Load Balancer Controller
+    alb.ingress.kubernetes.io/load-balancer-name: multimodal-pipeline-external
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ip-address-type: ipv4
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    # Certificate ARN - replace with actual ARN
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERT_ID
+    # Health check configuration
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+    alb.ingress.kubernetes.io/success-codes: "200"
+    # SSL/TLS policy - use modern TLS 1.2+ policy
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    # Subnet tagging for ALB placement (public subnets)
+    alb.ingress.kubernetes.io/subnets: subnet-public-xxxxx,subnet-public-yyyyy,subnet-public-zzzzz
+    # Security groups
+    alb.ingress.kubernetes.io/security-groups: sg-public-xxxxx
+    # WAF integration (required for external-facing)
+    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:REGION:ACCOUNT_ID:regional/webacl/NAME/ID
+    # Access logs
+    alb.ingress.kubernetes.io/load-balancer-attributes: |
+      access_logs.s3.enabled=true,
+      access_logs.s3.bucket=pipeline-alb-logs,
+      access_logs.s3.prefix=pipeline-production/external,
+      idle_timeout.timeout_seconds=60,
+      deletion_protection.enabled=true,
+      routing.http.drop_invalid_header_fields.enabled=true,
+      routing.http.xff_header_processing.mode=preserve,
+      routing.http.xff_client_port.enabled=true,
+      routing.http2.enabled=true
+    # Target group attributes
+    alb.ingress.kubernetes.io/target-group-attributes: |
+      stickiness.enabled=true,
+      stickiness.lb_cookie.duration_seconds=86400,
+      deregistration_delay.timeout_seconds=30,
+      slow_start.duration_seconds=30
+    # Tags
+    alb.ingress.kubernetes.io/tags: |
+      Environment=production,
+      Application=multimodal-pipeline,
+      ManagedBy=kubernetes,
+      PublicAccess=true
+spec:
+  ingressClassName: alb
+  rules:
+  - host: pipeline.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: multimodal-pipeline-service
+            port:
+              number: 8080
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: multimodal-pipeline-service
+            port:
+              number: 8080
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: multimodal-pipeline-service
+            port:
+              number: 8080
+

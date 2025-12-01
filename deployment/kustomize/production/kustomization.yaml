@@ -1,0 +1,32 @@
+# Kustomize production overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: pipeline-production
+
+resources:
+  - ../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: multimodal-pipeline
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: add
+        path: /spec/template/metadata/annotations/priority-class
+        value: pipeline-high-priority
+
+images:
+  - name: multimodal-pipeline
+    newTag: production-latest
+
+configMapGenerator:
+  - name: multimodal-pipeline-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=INFO
+      - ENABLE_PROFILING=false
+

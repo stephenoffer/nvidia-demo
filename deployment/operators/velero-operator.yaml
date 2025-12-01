@@ -1,0 +1,63 @@
+# Velero Operator Configuration
+# Replaces custom backup code with Velero Operator
+
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: aws-s3-backup
+  namespace: velero
+spec:
+  provider: aws
+  objectStorage:
+    bucket: pipeline-backups-production
+    prefix: velero
+  config:
+    region: us-east-1
+---
+apiVersion: velero.io/v1
+kind: VolumeSnapshotLocation
+metadata:
+  name: aws-ebs-snapshot
+  namespace: velero
+spec:
+  provider: aws
+  config:
+    region: us-east-1
+---
+# Backup Schedule - Replaces custom backup scripts
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: pipeline-daily-backup
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  template:
+    includedNamespaces:
+    - pipeline-production
+    includedResources:
+    - "*"
+    excludedResources:
+    - events
+    - events.events.k8s.io
+    labelSelector:
+      matchLabels:
+        backup: "true"
+    snapshotVolumes: true
+    ttl: 720h0m0s  # 30 days
+    storageLocation: aws-s3-backup
+    volumeSnapshotLocations:
+    - aws-ebs-snapshot
+---
+# Restore - Replaces custom restore scripts
+apiVersion: velero.io/v1
+kind: Restore
+metadata:
+  name: pipeline-restore
+  namespace: velero
+spec:
+  backupName: pipeline-backup-latest
+  includedNamespaces:
+  - pipeline-production
+  restorePVs: true
+

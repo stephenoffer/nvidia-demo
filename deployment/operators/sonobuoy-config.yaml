@@ -1,0 +1,38 @@
+# Sonobuoy Configuration for Conformance Testing
+# Replaces custom testing infrastructure with Sonobuoy
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sonobuoy-config
+  namespace: sonobuoy
+data:
+  # Sonobuoy for Kubernetes conformance testing
+  # Install: https://github.com/vmware-tanzu/sonobuoy
+  
+  # Run conformance tests:
+  # sonobuoy run --mode=certified-conformance
+  
+  # Check status:
+  # sonobuoy status
+  
+  # Retrieve results:
+  # sonobuoy retrieve
+---
+# Sonobuoy Plugin Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sonobuoy-plugin-config
+  namespace: sonobuoy
+data:
+  plugin.yaml: |
+    sonobuoy-config:
+      driver: Job
+      plugin-name: e2e
+      plugin-env: []
+    spec:
+      image: k8s.gcr.io/conformance:v1.28.0
+      command:
+      - /run_e2e.sh
+

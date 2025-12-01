@@ -1,0 +1,37 @@
+# Jaeger Operator Configuration
+# Replaces custom tracing with Jaeger Operator
+
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: pipeline-jaeger
+  namespace: observability
+spec:
+  strategy: production
+  storage:
+    type: elasticsearch
+    elasticsearch:
+      nodeCount: 3
+      redundancyPolicy: SingleRedundancy
+      storage:
+        storageClassName: gp3-ssd
+        size: 100Gi
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    hosts:
+    - jaeger.example.com
+---
+# Jaeger Agent Sidecar Injection
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-config
+  namespace: pipeline-production
+data:
+  JAEGER_AGENT_HOST: jaeger-agent.observability.svc.cluster.local
+  JAEGER_AGENT_PORT: "6831"
+  JAEGER_SAMPLER_TYPE: const
+  JAEGER_SAMPLER_PARAM: "1"
+

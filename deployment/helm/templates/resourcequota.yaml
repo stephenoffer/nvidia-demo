@@ -1,0 +1,41 @@
+{{- if .Values.resourceQuota.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ include "pipeline.fullname" . }}-quota
+  labels:
+    {{- include "pipeline.labels" . | nindent 4 }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.resourceQuota.requests.cpu | quote }}
+    requests.memory: {{ .Values.resourceQuota.requests.memory | quote }}
+    requests.nvidia.com/gpu: {{ .Values.resourceQuota.requests.nvidia.com/gpu | quote }}
+    limits.cpu: {{ .Values.resourceQuota.limits.cpu | quote }}
+    limits.memory: {{ .Values.resourceQuota.limits.memory | quote }}
+    limits.nvidia.com/gpu: {{ .Values.resourceQuota.limits.nvidia.com/gpu | quote }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: {{ include "pipeline.fullname" . }}-limits
+  labels:
+    {{- include "pipeline.labels" . | nindent 4 }}
+spec:
+  limits:
+  - default:
+      cpu: "4"
+      memory: 8Gi
+    defaultRequest:
+      cpu: "2"
+      memory: 4Gi
+    type: Container
+  - max:
+      cpu: "32"
+      memory: 64Gi
+      nvidia.com/gpu: "8"
+    min:
+      cpu: "100m"
+      memory: 128Mi
+    type: Container
+{{- end }}
+

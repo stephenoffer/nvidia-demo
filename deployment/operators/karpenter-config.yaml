@@ -1,0 +1,72 @@
+# Karpenter Configuration for AWS EKS
+# Replaces custom node management with Karpenter
+
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: gpu-nodepool
+spec:
+  template:
+    metadata:
+      labels:
+        accelerator: nvidia-gpu
+        node-type: gpu-worker
+    spec:
+      requirements:
+      - key: node.kubernetes.io/instance-type
+        operator: In
+        values:
+        - g5.2xlarge
+        - g5.4xlarge
+        - g5.8xlarge
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - on-demand
+        - spot
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      taints:
+      - key: nvidia.com/gpu
+        value: "true"
+        effect: NoSchedule
+  limits:
+    cpu: 1000
+    memory: 2000Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
+    expireAfter: 720h  # 30 days
+---
+# Karpenter Provisioner for CPU workers
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: cpu-nodepool
+spec:
+  template:
+    metadata:
+      labels:
+        workload-type: cpu
+    spec:
+      requirements:
+      - key: node.kubernetes.io/instance-type
+        operator: In
+        values:
+        - c5.2xlarge
+        - c5.4xlarge
+        - c5.8xlarge
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - spot
+        - on-demand
+  limits:
+    cpu: 2000
+    memory: 4000Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
+

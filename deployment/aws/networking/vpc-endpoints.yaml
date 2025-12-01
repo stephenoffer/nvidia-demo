@@ -1,0 +1,97 @@
+# VPC Endpoints for AWS EKS
+# Reduces data transfer costs and improves security by keeping traffic within VPC
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pipeline-production
+  labels:
+    name: pipeline-production
+    environment: production
+    cloud-provider: aws
+---
+# ConfigMap with VPC endpoint documentation
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vpc-endpoints-config
+  namespace: pipeline-production
+  labels:
+    app: vpc-endpoints-config
+data:
+  # S3 VPC Endpoint configuration
+  # Create via Terraform (see terraform/vpc-endpoints.tf) or AWS Console
+  # Required endpoints: S3 (Gateway), CloudWatch Logs (Interface), ECR (Interface), ECR DKR (Interface)
+  s3-endpoint-note: "S3 Gateway endpoint requires route table association"
+  logs-endpoint-note: "CloudWatch Logs Interface endpoint requires subnet and security group"
+  ecr-endpoint-note: "ECR Interface endpoints required for image pulls"
+---
+# Network Policy to restrict traffic to VPC endpoints
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pipeline-vpc-endpoint-policy
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: multimodal-pipeline
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS (required for all services)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow S3 VPC endpoint (Gateway endpoint uses route table, no IP block needed)
+  # Note: Gateway endpoints are automatically routed, but we allow HTTPS for explicit access
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443
+    # Restrict to S3 service only via DNS policy or security group
+  # Allow CloudWatch Logs VPC endpoint (Interface endpoint)
+  - to:
+    - ipBlock:
+        # Replace with actual VPC CIDR from environment variable or ConfigMap
+        cidr: 10.0.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow ECR endpoints for image pulls
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow EKS API server access
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow Ray head communication
+  - to:
+    - podSelector:
+        matchLabels:
+          ray.io/node-type: head
+    ports:
+    - protocol: TCP
+      port: 10001
+    - protocol: TCP
+      port: 8265
+    - protocol: TCP
+      port: 6379
+

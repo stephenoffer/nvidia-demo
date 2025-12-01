@@ -1,0 +1,49 @@
+# Node Configuration Guide for On-Premises Kubernetes
+# Apply labels and taints to nodes
+
+---
+# Example: Label GPU nodes
+# kubectl label nodes <node-name> accelerator=nvidia-gpu
+# kubectl label nodes <node-name> node-type=gpu-worker
+# kubectl label nodes <node-name> workload-type=gpu
+
+# Example: Add taints to dedicated GPU nodes
+# kubectl taint nodes <node-name> dedicated=pipeline:NoSchedule
+# kubectl taint nodes <node-name> nvidia.com/gpu=present:NoSchedule
+
+---
+# Node Selector for GPU workloads
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-selector-config
+  namespace: pipeline-production
+data:
+  gpu-node-selector.yaml: |
+    nodeSelector:
+      accelerator: nvidia-gpu
+      node-type: gpu-worker
+    tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+    - key: dedicated
+      operator: Equal
+      value: pipeline
+      effect: NoSchedule
+---
+# Resource Quota per node type
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-node-quota
+  namespace: pipeline-production
+spec:
+  hard:
+    requests.nvidia.com/gpu: "32"
+    limits.nvidia.com/gpu: "32"
+    requests.cpu: "128"
+    limits.cpu: "256"
+    requests.memory: 512Gi
+    limits.memory: 1Ti
+

@@ -1,0 +1,42 @@
+# Resource quotas for pipeline namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: pipeline-resource-quota
+  namespace: pipeline-production
+spec:
+  hard:
+    requests.cpu: "100"
+    requests.memory: 200Gi
+    requests.nvidia.com/gpu: "32"
+    limits.cpu: "200"
+    limits.memory: 400Gi
+    limits.nvidia.com/gpu: "32"
+    persistentvolumeclaims: "10"
+    services: "20"
+    secrets: "50"
+    configmaps: "50"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pipeline-limit-range
+  namespace: pipeline-production
+spec:
+  limits:
+  - default:
+      cpu: "4"
+      memory: 8Gi
+    defaultRequest:
+      cpu: "2"
+      memory: 4Gi
+    type: Container
+  - max:
+      cpu: "32"
+      memory: 64Gi
+      nvidia.com/gpu: "8"
+    min:
+      cpu: "100m"
+      memory: 128Mi
+    type: Container
+

@@ -1,0 +1,57 @@
+{
+  "groups": [
+    {
+      "name": "pipeline_alerts",
+      "rules": [
+        {
+          "alert": "HighErrorRate",
+          "expr": "rate(pipeline_errors_total[5m]) > 0.1",
+          "for": "5m",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "High error rate detected in pipeline",
+            "description": "Error rate is {{ $value }} errors/sec"
+          }
+        },
+        {
+          "alert": "LowThroughput",
+          "expr": "pipeline_pipeline_throughput_samples_per_second < 100",
+          "for": "10m",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "Low pipeline throughput",
+            "description": "Throughput is {{ $value }} samples/sec"
+          }
+        },
+        {
+          "alert": "HighGPUUtilization",
+          "expr": "pipeline_gpu_utilization > 0.95",
+          "for": "5m",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "High GPU utilization",
+            "description": "GPU {{ $labels.device_id }} utilization is {{ $value }}"
+          }
+        },
+        {
+          "alert": "HighGPUMemoryUsage",
+          "expr": "pipeline_gpu_memory_usage_ratio > 0.9",
+          "for": "5m",
+          "labels": {
+            "severity": "critical"
+          },
+          "annotations": {
+            "summary": "High GPU memory usage",
+            "description": "GPU {{ $labels.device_id }} memory usage is {{ $value }}"
+          }
+        }
+      ]
+    }
+  ]
+}

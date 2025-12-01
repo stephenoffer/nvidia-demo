@@ -1,0 +1,18 @@
+{{- if .Values.monitoring.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "pipeline.fullname" . }}
+  labels:
+    {{- include "pipeline.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "pipeline.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: prometheus-metrics
+    path: /metrics
+    interval: {{ .Values.monitoring.prometheus.serviceMonitor.interval }}
+    scrapeTimeout: {{ .Values.monitoring.prometheus.serviceMonitor.scrapeTimeout }}
+{{- end }}
+

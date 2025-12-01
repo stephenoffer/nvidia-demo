@@ -1,0 +1,43 @@
+# Standard Logging Integration
+# Replaces custom logging with structured logging libraries
+
+# Use structured logging libraries:
+# - Python: structlog, python-json-logger
+# - Java: Logback, Log4j2
+# - Go: zap, logrus
+# - Node.js: winston, pino
+
+# Example Python usage:
+# import structlog
+# 
+# logger = structlog.get_logger()
+# logger.info("pipeline_started", 
+#             stage="deduplication",
+#             items=1000,
+#             gpu_count=8)
+
+---
+# Standard logging configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logging-config
+  namespace: pipeline-production
+data:
+  logging.yaml: |
+    version: 1
+    formatters:
+      json:
+        class: pythonjsonlogger.jsonlogger.JsonFormatter
+        format: '%(asctime)s %(name)s %(levelname)s %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: json
+        stream: ext://sys.stdout
+    root:
+      level: INFO
+      handlers: [console]
+    
+    # Replace custom logging_config.py with standard configuration
+

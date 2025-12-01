@@ -1,0 +1,121 @@
+# Security Hardening for On-Premises Kubernetes
+# Pod Security Standards, Network Policies, RBAC
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pipeline-production
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# Network Policy - Restrict ingress/egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pipeline-network-policy
+  namespace: pipeline-production
+spec:
+  podSelector:
+    matchLabels:
+      app: multimodal-pipeline
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Ray head
+  - from:
+    - podSelector:
+        matchLabels:
+          ray.io/node-type: head
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow NFS access
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/8  # Update with your network CIDR
+    ports:
+    - protocol: TCP
+      port: 2049
+  # Allow Ray head communication
+  - to:
+    - podSelector:
+        matchLabels:
+          ray.io/node-type: head
+    ports:
+    - protocol: TCP
+      port: 10001
+---
+# RBAC - Service Account with minimal permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: multimodal-pipeline-sa
+  namespace: pipeline-production
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pipeline-role
+  namespace: pipeline-production
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pipeline-rolebinding
+  namespace: pipeline-production
+subjects:
+- kind: ServiceAccount
+  name: multimodal-pipeline-sa
+  namespace: pipeline-production
+roleRef:
+  kind: Role
+  name: pipeline-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pipeline-pdb
+  namespace: pipeline-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: multimodal-pipeline
+

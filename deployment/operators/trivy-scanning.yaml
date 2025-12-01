@@ -1,0 +1,36 @@
+# Trivy Configuration for Image Scanning
+# Replaces custom security scanning with Trivy
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trivy-config
+  namespace: trivy-system
+data:
+  # Trivy Operator for automated scanning
+  # Scans images on pull, reports vulnerabilities
+  
+  # Install:
+  # kubectl apply -f https://raw.githubusercontent.com/aquasecurity/trivy-operator/main/deploy/static/trivy-operator.yaml
+  
+  # Trivy provides:
+  # - Vulnerability scanning
+  # - Misconfiguration detection
+  # - Secret scanning
+  # - SBOM generation
+---
+# Trivy VulnerabilityReport CRD
+apiVersion: aquasecurity.github.io/v1alpha1
+kind: VulnerabilityReport
+metadata:
+  name: pipeline-image-scan
+  namespace: pipeline-production
+spec:
+  image:
+    repository: multimodal-pipeline
+    tag: latest
+  scanner:
+    name: Trivy
+    vendor: Aqua Security
+    version: "0.45.0"
+

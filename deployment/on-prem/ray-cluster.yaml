@@ -1,0 +1,150 @@
+# Ray Cluster Configuration for On-Premises Kubernetes
+
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: multimodal-pipeline-cluster
+  namespace: pipeline-production
+spec:
+  rayVersion: '2.10.0'
+  enableInTreeAutoscaling: true
+  autoscalerOptions:
+    upscalingMode: Aggressive
+    idleTimeoutSeconds: 60
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+      num-cpus: '4'
+      object-store-memory: '4000000000'  # 4GB
+    template:
+      spec:
+        serviceAccountName: multimodal-pipeline-sa
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.10.0-gpu
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          resources:
+            limits:
+              cpu: "4"
+              memory: 8Gi
+            requests:
+              cpu: "2"
+              memory: 4Gi
+          env:
+          - name: RAY_DISABLE_IMPORT_WARNING
+            value: "1"
+          volumeMounts:
+          - name: ray-logs
+            mountPath: /tmp/ray
+        volumes:
+        - name: ray-logs
+          emptyDir:
+            sizeLimit: 5Gi
+  workerGroupSpecs:
+  - replicas: 4
+    minReplicas: 2
+    maxReplicas: 16
+    groupName: gpu-workers
+    rayStartParams:
+      num-cpus: '8'
+      num-gpus: '2'
+      object-store-memory: '16000000000'  # 16GB
+    template:
+      spec:
+        serviceAccountName: multimodal-pipeline-sa
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.10.0-gpu
+          resources:
+            requests:
+              nvidia.com/gpu: "2"
+              cpu: "8"
+              memory: 32Gi
+            limits:
+              nvidia.com/gpu: "2"
+              cpu: "16"
+              memory: 64Gi
+          env:
+          - name: RAY_DISABLE_IMPORT_WARNING
+            value: "1"
+          volumeMounts:
+          - name: ray-logs
+            mountPath: /tmp/ray
+        volumes:
+        - name: ray-logs
+          emptyDir:
+            sizeLimit: 5Gi
+        nodeSelector:
+          accelerator: nvidia-gpu
+          node-type: gpu-worker
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        - key: dedicated
+          operator: Equal
+          value: pipeline
+          effect: NoSchedule
+  - replicas: 8
+    minReplicas: 4
+    maxReplicas: 24
+    groupName: cpu-workers
+    rayStartParams:
+      num-cpus: '4'
+      object-store-memory: '4000000000'  # 4GB
+    template:
+      spec:
+        serviceAccountName: multimodal-pipeline-sa
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.10.0
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              cpu: "8"
+              memory: 16Gi
+          env:
+          - name: RAY_DISABLE_IMPORT_WARNING
+            value: "1"
+          volumeMounts:
+          - name: ray-logs
+            mountPath: /tmp/ray
+        volumes:
+        - name: ray-logs
+          emptyDir:
+            sizeLimit: 5Gi
+        nodeSelector:
+          workload-type: cpu
+---
+# Service for Ray Head
+apiVersion: v1
+kind: Service
+metadata:
+  name: ray-head-service
+  namespace: pipeline-production
+  labels:
+    app: ray-head
+spec:
+  type: ClusterIP
+  ports:
+  - port: 10001
+    targetPort: 10001
+    name: client
+    protocol: TCP
+  - port: 8265
+    targetPort: 8265
+    name: dashboard
+    protocol: TCP
+  selector:
+    ray.io/node-type: head
+    ray.io/cluster: multimodal-pipeline-cluster
+

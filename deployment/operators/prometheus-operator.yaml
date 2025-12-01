@@ -1,0 +1,69 @@
+# Prometheus Operator Configuration
+# Replaces custom metrics collection with standard Prometheus Operator
+
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: pipeline-prometheus
+  namespace: monitoring
+spec:
+  serviceAccountName: prometheus
+  serviceMonitorSelector:
+    matchLabels:
+      app: multimodal-pipeline
+  podMonitorSelector:
+    matchLabels:
+      app: multimodal-pipeline
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 1000m
+    limits:
+      memory: 4Gi
+      cpu: 2000m
+  retention: 30d
+  storage:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3-ssd
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 100Gi
+---
+# ServiceMonitor - Replaces custom Prometheus configuration
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: multimodal-pipeline
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  selector:
+    matchLabels:
+      app: multimodal-pipeline
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scheme: http
+---
+# PodMonitor for Ray workers
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: ray-workers
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  selector:
+    matchLabels:
+      ray.io/node-type: worker
+  podMetricsEndpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+

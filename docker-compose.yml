@@ -1,0 +1,79 @@
+# Docker Compose for local development
+version: '3.8'
+
+services:
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: multimodal-pipeline:dev
+    container_name: pipeline-dev
+    environment:
+      - RAY_ADDRESS=ray://ray-head:10001
+      - ENABLE_HEALTH_SERVER=true
+      - HEALTH_CHECK_PORT=8080
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/app
+      - pipeline-data:/data
+    depends_on:
+      - ray-head
+    networks:
+      - pipeline-network
+
+  ray-head:
+    image: rayproject/ray:2.10.0-gpu
+    container_name: ray-head-dev
+    command: ray start --head --dashboard-host=0.0.0.0 --port=6379
+    ports:
+      - "8265:8265"  # Ray dashboard
+      - "10001:10001"  # Ray client
+    environment:
+      - RAY_DISABLE_IMPORT_WARNING=1
+    volumes:
+      - ray-data:/tmp/ray
+    networks:
+      - pipeline-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-dev
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deployment/prometheus-config.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - pipeline-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deployment/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+    depends_on:
+      - prometheus
+    networks:
+      - pipeline-network
+
+volumes:
+  pipeline-data:
+  ray-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  pipeline-network:
+    driver: bridge
+

@@ -1,0 +1,53 @@
+# Fluent Bit Operator Configuration
+# Replaces custom logging with Fluent Bit Operator
+
+apiVersion: logging.fluentd.org/v1alpha2
+kind: FluentBit
+metadata:
+  name: pipeline-fluentbit
+  namespace: logging
+spec:
+  image: fluent/fluent-bit:latest
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  filters:
+  - name: kubernetes
+    match: "kube.*"
+    kubernetes:
+      kubeURL: https://kubernetes.default.svc:443
+      kubeCAFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      kubeTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+  outputs:
+  - name: cloudwatch
+    match: "pipeline.*"
+    cloudwatch:
+      region: us-east-1
+      logGroupName: /aws/eks/pipeline-production
+      logStreamPrefix: pipeline-
+      autoCreateGroup: true
+---
+# Fluent Bit Config for On-Prem (Loki output)
+apiVersion: logging.fluentd.org/v1alpha2
+kind: FluentBit
+metadata:
+  name: pipeline-fluentbit-loki
+  namespace: logging
+spec:
+  image: fluent/fluent-bit:latest
+  outputs:
+  - name: loki
+    match: "pipeline.*"
+    loki:
+      host: loki.logging.svc.cluster.local
+      port: 3100
+      labels:
+        - job
+        - container
+        - pod
+        - namespace
+

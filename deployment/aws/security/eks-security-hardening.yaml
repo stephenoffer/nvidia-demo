@@ -1,0 +1,196 @@
+# Security Hardening for AWS EKS
+# Pod Security Standards, Network Policies, RBAC, Pod Security Policies
+# Requires: Pod Security Admission (PSA) enabled in EKS 1.23+
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pipeline-production
+  labels:
+    name: pipeline-production
+    environment: production
+    cloud-provider: aws
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# Network Policy - Restrict ingress/egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pipeline-network-policy
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: multimodal-pipeline
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Ray head
+  - from:
+    - podSelector:
+        matchLabels:
+          ray.io/node-type: head
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: aws-load-balancer-controller
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow S3 access (restricted to HTTPS)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443
+    # Note: In production, restrict to S3 VPC endpoint IPs
+  # Allow Ray head communication
+  - to:
+    - podSelector:
+        matchLabels:
+          ray.io/node-type: head
+    ports:
+    - protocol: TCP
+      port: 10001
+    - protocol: TCP
+      port: 8265
+    - protocol: TCP
+      port: 6379
+  # Allow CloudWatch Logs
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443
+---
+# RBAC - Service Account with minimal permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: multimodal-pipeline-sa
+  namespace: pipeline-production
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/multimodal-pipeline-role
+  labels:
+    app: multimodal-pipeline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pipeline-role
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pipeline-rolebinding
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+subjects:
+- kind: ServiceAccount
+  name: multimodal-pipeline-sa
+  namespace: pipeline-production
+roleRef:
+  kind: Role
+  name: pipeline-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pipeline-pdb
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: multimodal-pipeline
+---
+# Security Context Constraints (if using OpenShift) or Pod Security Policy equivalent
+# Note: For EKS, use Pod Security Admission labels on namespace instead
+---
+# Network Policy for default deny all (if needed)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: pipeline-production
+  labels:
+    app: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Allow DNS egress for all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: pipeline-production
+  labels:
+    app: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53

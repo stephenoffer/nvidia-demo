@@ -1,0 +1,38 @@
+# Standard Health Check Library Integration
+# Replaces custom health server with standard libraries
+
+# Use k8s-health-check library instead of custom implementation
+# Install: pip install k8s-health-check
+
+# Example usage in Python:
+# from k8s_health_check import HealthCheck
+# 
+# health = HealthCheck()
+# health.add_check("ray_cluster", check_ray_cluster)
+# health.add_check("gpu_resources", check_gpu_resources)
+# 
+# # Expose endpoints
+# health.serve(port=8080)
+
+---
+# Kubernetes-native health check endpoints
+# Use standard HTTP endpoints with Prometheus health checks
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: health-check-config
+  namespace: pipeline-production
+data:
+  # Standard health check endpoints
+  # /health - Comprehensive health check
+  # /ready - Readiness probe
+  # /live - Liveness probe
+  # /metrics - Prometheus metrics
+  
+  # Use standard libraries:
+  # - k8s-health-check (Python)
+  # - spring-boot-actuator (Java)
+  # - healthcheck (Go)
+  
+  note: "Replace custom health_server.py with standard library"
+

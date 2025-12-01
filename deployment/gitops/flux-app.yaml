@@ -1,0 +1,33 @@
+# Flux GitOps Configuration - Alternative to ArgoCD
+# Replaces custom deployment scripts
+
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: multimodal-pipeline
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  path: ./deployment/kustomize/production
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: nvidia-demo
+  validation: client
+  healthChecks:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: multimodal-pipeline
+    namespace: pipeline-production
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: nvidia-demo
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  url: https://github.com/your-org/nvidia-demo.git
+  ref:
+    branch: main
+

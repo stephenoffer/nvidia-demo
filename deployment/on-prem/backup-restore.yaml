@@ -1,0 +1,60 @@
+# Backup and Restore Configuration for On-Premises
+# Uses Velero with local storage or S3-compatible storage
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-backup-config
+  namespace: velero
+data:
+  # Velero backup schedule
+  schedule.yaml: |
+    apiVersion: velero.io/v1
+    kind: Schedule
+    metadata:
+      name: pipeline-daily-backup
+      namespace: velero
+    spec:
+      schedule: "0 2 * * *"  # Daily at 2 AM
+      template:
+        includedNamespaces:
+        - pipeline-production
+        includedResources:
+        - "*"
+        excludedResources:
+        - events
+        - events.events.k8s.io
+        labelSelector:
+          matchLabels:
+            backup: "true"
+        snapshotVolumes: true
+        ttl: 720h0m0s  # 30 days
+        storageLocation: local-backup
+        volumeSnapshotLocations:
+        - local-snapshot
+---
+# Velero BackupStorageLocation for local/MinIO
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: local-backup
+  namespace: velero
+spec:
+  provider: aws  # MinIO is S3-compatible
+  objectStorage:
+    bucket: pipeline-backups
+    prefix: velero
+  config:
+    region: minio
+    s3ForcePathStyle: "true"
+    s3Url: http://minio.backup.svc.cluster.local:9000
+---
+# Velero VolumeSnapshotLocation for local storage
+apiVersion: velero.io/v1
+kind: VolumeSnapshotLocation
+metadata:
+  name: local-snapshot
+  namespace: velero
+spec:
+  provider: local  # Or use your storage provisioner
+

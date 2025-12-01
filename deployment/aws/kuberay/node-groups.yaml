@@ -1,0 +1,206 @@
+# EKS Node Group Configuration
+# Use eksctl, Terraform, or Karpenter to create node groups
+# This file provides Karpenter configurations for automatic node provisioning
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: karpenter
+  labels:
+    name: karpenter
+---
+# Karpenter NodePool for GPU workloads
+apiVersion: karpenter.sh/v1alpha5
+kind: NodePool
+metadata:
+  name: gpu-nodepool
+  namespace: karpenter
+  labels:
+    app: karpenter
+    node-pool-type: gpu
+spec:
+  template:
+    metadata:
+      labels:
+        accelerator: nvidia-gpu
+        node-type: gpu-worker
+        workload-type: gpu
+        karpenter.sh/nodepool: gpu-nodepool
+      annotations:
+        node.kubernetes.io/instance-type: "g5.2xlarge"
+    spec:
+      requirements:
+      # Instance type requirements - prefer newer GPU instances
+      - key: node.kubernetes.io/instance-type
+        operator: In
+        values:
+        - g5.2xlarge
+        - g5.4xlarge
+        - g5.8xlarge
+        - g5.12xlarge
+        - g5.16xlarge
+        - g5.24xlarge
+        - g5.48xlarge
+        - p4d.24xlarge  # For high-performance workloads
+      # Architecture requirement
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      # Capacity type - on-demand for GPU workloads (more stable)
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - on-demand
+      # Zone distribution for high availability
+      - key: topology.kubernetes.io/zone
+        operator: In
+        values:
+        - us-east-1a
+        - us-east-1b
+        - us-east-1c
+      taints:
+      - key: nvidia.com/gpu
+        value: "true"
+        effect: NoSchedule
+      # User data for GPU driver installation if needed
+      # userData: |
+      #   #!/bin/bash
+      #   /etc/eks/bootstrap.sh ${CLUSTER_NAME}
+  limits:
+    cpu: 1000
+    memory: 2000Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
+    expireAfter: 720h  # 30 days
+---
+# Karpenter NodePool for CPU workloads (Spot instances for cost savings)
+apiVersion: karpenter.sh/v1alpha5
+kind: NodePool
+metadata:
+  name: cpu-nodepool
+  namespace: karpenter
+  labels:
+    app: karpenter
+    node-pool-type: cpu
+spec:
+  template:
+    metadata:
+      labels:
+        workload-type: cpu
+        karpenter.sh/nodepool: cpu-nodepool
+      annotations:
+        karpenter.sh/do-not-disrupt: "false"
+    spec:
+      requirements:
+      # Instance type requirements - multiple sizes for flexibility
+      - key: node.kubernetes.io/instance-type
+        operator: In
+        values:
+        - c5.2xlarge
+        - c5.4xlarge
+        - c5.8xlarge
+        - c5.9xlarge
+        - c5.12xlarge
+        - c5.18xlarge
+        - c5.24xlarge
+        - c5n.2xlarge
+        - c5n.4xlarge
+        - c5n.9xlarge
+        - c6i.2xlarge
+        - c6i.4xlarge
+        - c6i.8xlarge
+      # Architecture requirement
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      # Capacity type - prefer spot, fallback to on-demand
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - spot
+        - on-demand
+      # Zone distribution
+      - key: topology.kubernetes.io/zone
+        operator: In
+        values:
+        - us-east-1a
+        - us-east-1b
+        - us-east-1c
+        - us-east-1d
+        - us-east-1e
+        - us-east-1f
+      # Spot instance interruption handling
+      kubelet:
+        maxPods: 110
+        systemReserved:
+          cpu: 100m
+          memory: 100Mi
+          ephemeral-storage: 1Gi
+        kubeReserved:
+          cpu: 100m
+          memory: 100Mi
+          ephemeral-storage: 1Gi
+      taints:
+      - key: spot-instance
+        value: "true"
+        effect: NoSchedule
+  limits:
+    cpu: 2000
+    memory: 4000Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
+    expireAfter: 720h  # 30 days
+---
+# Karpenter NodePool for system workloads (always on-demand)
+apiVersion: karpenter.sh/v1alpha5
+kind: NodePool
+metadata:
+  name: system-nodepool
+  namespace: karpenter
+  labels:
+    app: karpenter
+    node-pool-type: system
+spec:
+  template:
+    metadata:
+      labels:
+        workload-type: system
+        karpenter.sh/nodepool: system-nodepool
+    spec:
+      requirements:
+      - key: node.kubernetes.io/instance-type
+        operator: In
+        values:
+        - t3.medium
+        - t3.large
+        - t3.xlarge
+        - m5.large
+        - m5.xlarge
+        - m5.2xlarge
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - on-demand
+      - key: topology.kubernetes.io/zone
+        operator: In
+        values:
+        - us-east-1a
+        - us-east-1b
+        - us-east-1c
+      taints: []
+  limits:
+    cpu: 100
+    memory: 200Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 300s  # 5 minutes for system workloads
+    expireAfter: Never  # System nodes should not expire
+

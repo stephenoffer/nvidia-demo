@@ -1,0 +1,233 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multimodal-data-pipeline"
+version = "0.1.0"
+description = "Production-ready multimodal data curation pipeline for robotics foundation models"
+readme = "README.md"
+requires-python = ">=3.9,<3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "NVIDIA Demo", email = "demo@nvidia.com"}
+]
+maintainers = [
+    {name = "NVIDIA Demo", email = "demo@nvidia.com"}
+]
+keywords = ["ray", "data", "robotics", "multimodal", "etl", "gpu", "nvidia", "groot"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "ray[data]>=2.10.0",
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "pyarrow>=12.0.0",
+    "opencv-python>=4.8.0",
+    "pillow>=10.0.0",
+    "transformers>=4.30.0",
+    "sentencepiece>=0.1.99",
+    "scikit-learn>=1.3.0",
+    "numba>=0.57.0",
+    "cupy-cuda12x>=12.0.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.65.0",
+    "matplotlib>=3.7.0",
+    "plotly>=5.14.0",
+    "h5py>=3.9.0",
+    "imageio>=2.31.0",
+    "imageio-ffmpeg>=0.4.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.2.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "types-pyyaml>=6.0.0",
+    "types-requests>=2.31.0",
+    "pre-commit>=3.0.0",
+    "bandit>=1.7.0",
+    "safety>=2.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=1.3.0",
+    "myst-parser>=2.0.0",
+    "ipython>=8.0.0",
+    "ipdb>=0.13.0",
+    "jupyter>=1.0.0",
+]
+gpu = [
+    "cudf-cu12>=23.12.0",
+    "cuml-cu12>=23.12.0",
+]
+monitoring = [
+    "prometheus-client>=0.18.0",
+    "psutil>=5.9.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.2.0",
+    "hypothesis>=6.92.0",
+    "faker>=20.0.0",
+    "freezegun>=1.2.0",
+    "coverage>=7.3.0",
+    "codecov>=2.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/nvidia-demo"
+Documentation = "https://github.com/your-org/nvidia-demo/tree/main/docs"
+Repository = "https://github.com/your-org/nvidia-demo"
+Issues = "https://github.com/your-org/nvidia-demo/issues"
+Changelog = "https://github.com/your-org/nvidia-demo/blob/main/CHANGELOG.md"
+
+[project.scripts]
+pipeline = "pipeline.cli:main"
+pipeline-health = "pipeline.cli:health_check_cli"
+pipeline-server = "pipeline.cli:start_server_cli"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "*.egg-info",
+    ".pytest_cache",
+    ".mypy_cache",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "S",   # flake8-bandit (security)
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "S101",  # use of assert (ok in tests)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports
+"tests/**" = ["S101"]  # assert statements in tests
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "cupy.*",
+    "cuml.*",
+    "cudf.*",
+    "rosbag2_py.*",
+    "rclpy.*",
+    "rosidl_runtime_py.*",
+]
+ignore_missing_imports = true
+
+[tool.setuptools]
+packages = ["pipeline"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "benchmark: Performance benchmarks",
+    "slow: Slow running tests",
+    "gpu: Tests requiring GPU",
+    "ray: Tests requiring Ray cluster",
+]
+
+[tool.coverage.run]
+source = ["pipeline"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "*/__version__.py",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"

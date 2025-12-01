@@ -1,0 +1,58 @@
+# Linkerd Service Mesh Configuration for On-Premises
+# Optional: Provides mTLS, observability, and traffic management
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: multimodal-pipeline-service
+  namespace: pipeline-production
+  annotations:
+    linkerd.io/inject: enabled
+spec:
+  # Service definition
+---
+# Service Profile for advanced routing
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: multimodal-pipeline-service
+  namespace: pipeline-production
+spec:
+  routes:
+  - name: health-checks
+    condition:
+      method: GET
+      pathRegex: "/(health|ready|live)"
+    timeout: 5s
+    isRetryable: false
+  - name: metrics
+    condition:
+      method: GET
+      pathRegex: "/metrics"
+    timeout: 10s
+    isRetryable: false
+  - name: api
+    condition:
+      method: POST
+      pathRegex: "/api/.*"
+    timeout: 600s
+    isRetryable: true
+    retryBudget:
+      retryRatio: 0.2
+      minRetriesPerSecond: 10
+      ttl: 10s
+---
+# TrafficSplit for canary deployments
+apiVersion: split.smi-spec.io/v1alpha4
+kind: TrafficSplit
+metadata:
+  name: pipeline-canary
+  namespace: pipeline-production
+spec:
+  service: multimodal-pipeline-service
+  backends:
+  - service: multimodal-pipeline-v1
+    weight: 90
+  - service: multimodal-pipeline-v2
+    weight: 10
+

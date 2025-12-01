@@ -1,0 +1,167 @@
+# Default values for multimodal-pipeline Helm chart
+
+replicaCount: 3
+
+image:
+  repository: multimodal-pipeline
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+
+service:
+  type: ClusterIP
+  port: 8080
+  metricsPort: 9090
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: pipeline.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: "16"
+    memory: 32Gi
+    nvidia.com/gpu: "8"
+  limits:
+    cpu: "32"
+    memory: 64Gi
+    nvidia.com/gpu: "8"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector:
+  accelerator: nvidia-gpu
+
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - multimodal-pipeline
+          topologyKey: kubernetes.io/hostname
+
+ray:
+  enabled: true
+  version: "2.10.0"
+  headGroup:
+    replicas: 1
+    resources:
+      requests:
+        cpu: "4"
+        memory: 8Gi
+      limits:
+        cpu: "4"
+        memory: 8Gi
+  workerGroups:
+    - name: gpu-workers
+      replicas: 4
+      minReplicas: 2
+      maxReplicas: 10
+      resources:
+        requests:
+          nvidia.com/gpu: "2"
+          cpu: "8"
+          memory: 32Gi
+        limits:
+          nvidia.com/gpu: "2"
+          cpu: "8"
+          memory: 32Gi
+
+config:
+  input_paths:
+    - "s3://bucket/videos/"
+    - "s3://bucket/text/"
+  output_path: "s3://bucket/curated/"
+  enable_gpu_dedup: true
+  num_gpus: 8
+  streaming: true
+  checkpoint_interval: 1000
+
+env:
+  - name: RAY_ADDRESS
+    value: "ray://ray-head-service:10001"
+  - name: LOG_LEVEL
+    value: "INFO"
+  - name: ENABLE_HEALTH_SERVER
+    value: "true"
+  - name: HEALTH_CHECK_PORT
+    value: "8080"
+
+secrets:
+  aws:
+    create: true
+    accessKeyId: ""
+    secretAccessKey: ""
+
+monitoring:
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 15s
+      scrapeTimeout: 10s
+  grafana:
+    enabled: true
+
+networkPolicy:
+  enabled: true
+
+resourceQuota:
+  enabled: true
+  requests:
+    cpu: "100"
+    memory: 200Gi
+    nvidia.com/gpu: "32"
+  limits:
+    cpu: "200"
+    memory: 400Gi
+    nvidia.com/gpu: "32"
+

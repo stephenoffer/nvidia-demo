@@ -1,0 +1,12 @@
+{
+  "stage": "VideoProcessor",
+  "stage_index": 3,
+  "error": "``compute`` is specified as the actor compute strategy: ActorPoolStrategy(min_size=2, max_size=2, initial_size=2, max_tasks_in_flight_per_actor=None)num_workers=0, ready_to_total_workers_ratio=0.8), but ``fn`` is not a callable class: <pipeline.stages.video.VideoProcessor.process.<locals>.VideoBatchProcessor object at 0x16af0d9a0>. Pass a callable class or use the default ``compute`` strategy.",
+  "metrics": {
+    "elapsed_time": 0.6208817958831787,
+    "current_stage": "CompletenessValidator",
+    "num_stages_completed": 3,
+    "total_samples": 0,
+    "errors": 1
+  }
+}

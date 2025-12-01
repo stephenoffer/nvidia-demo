@@ -1,0 +1,134 @@
+# cert-manager Configuration for AWS EKS
+# Automatic TLS certificate management
+# Note: For AWS EKS, prefer using ACM directly with ALB ingress annotations
+# This configuration provides Let's Encrypt as an alternative
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels:
+    name: cert-manager
+    app: cert-manager
+---
+# ClusterIssuer for Let's Encrypt (staging for testing)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+  labels:
+    app: cert-manager
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@example.com  # Replace with actual email
+    privateKeySecretRef:
+      name: letsencrypt-staging-key
+    solvers:
+    - http01:
+        ingress:
+          class: alb
+---
+# ClusterIssuer for Let's Encrypt (production)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  labels:
+    app: cert-manager
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com  # Replace with actual email
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+    - http01:
+        ingress:
+          class: alb
+    # DNS01 solver for wildcard certificates (requires Route53)
+    # - dns01:
+    #     route53:
+    #       region: us-east-1
+    #       hostedZoneID: Z1234567890ABC
+---
+# Certificate for pipeline service (internal)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: pipeline-tls-cert-internal
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  secretName: pipeline-tls-secret-internal
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - pipeline.internal.example.com
+  - pipeline-api.internal.example.com
+  duration: 2160h  # 90 days
+  renewBefore: 720h  # 30 days before expiration
+  usages:
+  - server auth
+  - client auth
+---
+# Certificate for pipeline service (external)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: pipeline-tls-cert-external
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+spec:
+  secretName: pipeline-tls-secret-external
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - pipeline.example.com
+  - pipeline-api.example.com
+  - "*.example.com"  # Wildcard certificate (requires DNS01 solver)
+  duration: 2160h  # 90 days
+  renewBefore: 720h  # 30 days before expiration
+  usages:
+  - server auth
+---
+# Certificate for Ray dashboard
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ray-dashboard-tls-cert
+  namespace: pipeline-production
+  labels:
+    app: ray-dashboard
+spec:
+  secretName: ray-dashboard-tls-secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - ray-dashboard.example.com
+  duration: 2160h
+  renewBefore: 720h
+  usages:
+  - server auth
+---
+# Note: For production AWS EKS deployments, prefer using AWS Certificate Manager (ACM)
+# ACM certificates are free, automatically renewed, and integrate seamlessly with ALB
+# 
+# To use ACM:
+# 1. Request certificate in ACM (or use existing)
+# 2. Validate domain ownership (DNS or email)
+# 3. Use certificate ARN in ALB ingress annotation:
+#    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERT_ID
+#
+# Example ACM certificate request:
+# aws acm request-certificate \
+#   --domain-name pipeline.example.com \
+#   --subject-alternative-names pipeline-api.example.com \
+#   --validation-method DNS \
+#   --region us-east-1
+

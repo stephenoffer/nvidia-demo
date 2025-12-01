@@ -1,0 +1,302 @@
+# Comprehensive Monitoring Configuration for AWS EKS
+# Integrates CloudWatch, Prometheus, and Grafana
+# Requires: Prometheus Operator (optional), CloudWatch Exporter, IRSA configured
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    app: monitoring
+---
+# Service Account for CloudWatch Exporter with IRSA
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloudwatch-exporter-sa
+  namespace: monitoring
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/cloudwatch-exporter-role
+  labels:
+    app: cloudwatch-exporter
+---
+# ConfigMap for Prometheus configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+  labels:
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      scrape_timeout: 10s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: multimodal-pipeline-cluster
+        environment: production
+        region: us-east-1
+    
+    # Alertmanager configuration
+    alerting:
+      alertmanagers:
+      - static_configs:
+        - targets:
+          - alertmanager.monitoring.svc.cluster.local:9093
+    
+    # Rule files
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+    
+    scrape_configs:
+    # Kubernetes API server
+    - job_name: 'kubernetes-apiservers'
+      kubernetes_sd_configs:
+      - role: endpoints
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+    
+    # Kubernetes nodes
+    - job_name: 'kubernetes-nodes'
+      kubernetes_sd_configs:
+      - role: node
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+    
+    # Kubernetes pods
+    - job_name: 'kubernetes-pods'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+    
+    # Pipeline metrics
+    - job_name: 'pipeline-metrics'
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+          - pipeline-production
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: multimodal-pipeline
+      - source_labels: [__meta_kubernetes_pod_ip]
+        action: replace
+        target_label: instance
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+    
+    # Ray cluster metrics
+    - job_name: 'ray-cluster'
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+          - pipeline-production
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_node_type]
+        action: keep
+        regex: head|worker
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_cluster]
+        action: replace
+        target_label: ray_cluster
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_node_type]
+        action: replace
+        target_label: ray_node_type
+    
+    # CloudWatch Exporter
+    - job_name: 'cloudwatch-exporter'
+      static_configs:
+      - targets:
+        - cloudwatch-exporter.monitoring.svc.cluster.local:9106
+        labels:
+          exporter: cloudwatch
+---
+# CloudWatch Exporter Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudwatch-exporter
+  namespace: monitoring
+  labels:
+    app: cloudwatch-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudwatch-exporter
+  template:
+    metadata:
+      labels:
+        app: cloudwatch-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9106"
+    spec:
+      serviceAccountName: cloudwatch-exporter-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: cloudwatch-exporter
+        image: prom/cloudwatch-exporter:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: metrics
+          containerPort: 9106
+          protocol: TCP
+        env:
+        - name: AWS_REGION
+          value: us-east-1
+        - name: AWS_DEFAULT_REGION
+          value: us-east-1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+# Service for CloudWatch Exporter
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudwatch-exporter
+  namespace: monitoring
+  labels:
+    app: cloudwatch-exporter
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9106"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9106
+    targetPort: 9106
+    protocol: TCP
+    name: metrics
+  selector:
+    app: cloudwatch-exporter
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pipeline-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: pipeline.rules
+    interval: 30s
+    rules:
+    - alert: PipelineHighCPU
+      expr: rate(container_cpu_usage_seconds_total{namespace="pipeline-production",container="pipeline"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pipeline pod CPU usage is high"
+        description: "Pod {{ $labels.pod }} CPU usage is above 80%"
+    
+    - alert: PipelineHighMemory
+      expr: container_memory_working_set_bytes{namespace="pipeline-production",container="pipeline"} / container_spec_memory_limit_bytes > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pipeline pod memory usage is high"
+        description: "Pod {{ $labels.pod }} memory usage is above 80%"
+    
+    - alert: PipelinePodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{namespace="pipeline-production"}[15m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pipeline pod is crash looping"
+        description: "Pod {{ $labels.pod }} is restarting frequently"
+    
+    - alert: RayHeadDown
+      expr: up{job="ray-cluster",ray_node_type="head"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Ray head node is down"
+        description: "Ray head node has been down for more than 2 minutes"
+    
+    - alert: RayWorkerDown
+      expr: count(up{job="ray-cluster",ray_node_type="worker"} == 0) > 2
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Multiple Ray worker nodes are down"
+        description: "{{ $value }} Ray worker nodes are down"

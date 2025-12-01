@@ -1,0 +1,326 @@
+# On-Premises Kubernetes Deployment Configuration
+# For self-managed Kubernetes clusters (no cloud provider)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pipeline-production
+  labels:
+    name: pipeline-production
+    environment: production
+    deployment-type: on-premises
+---
+# Service Account (no IRSA needed for on-prem)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: multimodal-pipeline-sa
+  namespace: pipeline-production
+---
+# Storage Class for local storage
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: false
+---
+# Storage Class for NFS (for shared storage)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-sc
+provisioner: example.com/nfs  # Replace with your NFS provisioner
+parameters:
+  server: nfs-server.example.com
+  path: /exports/pipeline-data
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+---
+# Storage Class for CephFS (alternative shared storage)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cephfs-sc
+provisioner: ceph.com/cephfs
+parameters:
+  monitors: "ceph-mon-1:6789,ceph-mon-2:6789,ceph-mon-3:6789"
+  adminId: admin
+  adminSecretName: ceph-admin-secret
+  adminSecretNamespace: kube-system
+  claimRoot: /pipeline-data
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+---
+# Persistent Volume for local storage (example)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pipeline-checkpoints-local
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-ssd
+  local:
+    path: /mnt/ssd/pipeline-checkpoints
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - gpu-node-1
+---
+# Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pipeline-checkpoints
+  namespace: pipeline-production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-ssd
+  resources:
+    requests:
+      storage: 500Gi
+---
+# ConfigMap with on-prem specific configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multimodal-pipeline-config
+  namespace: pipeline-production
+data:
+  config.yaml: |
+    # On-premises configuration
+    input_paths:
+      - "/data/input/videos/"
+      - "/data/input/text/"
+      - "nfs://nfs-server.example.com/exports/input/"
+    output_path: "/data/output/curated/"
+    
+    # Storage settings
+    storage:
+      type: local  # or nfs, cephfs
+      checkpoint_dir: /data/checkpoints
+      tmp_dir: /tmp/pipeline
+    
+    # Pipeline settings
+    enable_gpu_dedup: true
+    num_gpus: 8
+    streaming: true
+    checkpoint_interval: 1000
+    
+    # On-prem specific optimizations
+    batch_size: 1000
+    prefetch_buffer_size: 4
+    
+    # Logging to local filesystem
+    logging:
+      level: INFO
+      file: /var/log/pipeline/pipeline.log
+      max_size_mb: 100
+      backup_count: 10
+---
+# Secret for on-prem credentials (if needed)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pipeline-credentials
+  namespace: pipeline-production
+type: Opaque
+stringData:
+  # Add any on-prem specific credentials here
+  nfs-username: ""
+  nfs-password: ""
+---
+# Deployment optimized for on-prem
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multimodal-pipeline
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+    deployment-type: on-premises
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: multimodal-pipeline
+  template:
+    metadata:
+      labels:
+        app: multimodal-pipeline
+        deployment-type: on-premises
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: multimodal-pipeline-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: pipeline
+        image: registry.example.com/multimodal-pipeline:latest  # Replace with your registry
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 30
+        env:
+        - name: PIPELINE_CONFIG_PATH
+          value: /app/config/config.yaml
+        - name: RAY_ADDRESS
+          value: "ray://ray-head-service.pipeline-production.svc.cluster.local:10001"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: LOG_FILE
+          value: "/var/log/pipeline/pipeline.log"
+        resources:
+          requests:
+            cpu: "16"
+            memory: 32Gi
+            nvidia.com/gpu: "8"
+          limits:
+            cpu: "32"
+            memory: 64Gi
+            nvidia.com/gpu: "8"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: checkpoints
+          mountPath: /data/checkpoints
+        - name: input-data
+          mountPath: /data/input
+          readOnly: true
+        - name: output-data
+          mountPath: /data/output
+        - name: logs
+          mountPath: /var/log/pipeline
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: multimodal-pipeline-config
+      - name: checkpoints
+        persistentVolumeClaim:
+          claimName: pipeline-checkpoints
+      - name: input-data
+        hostPath:
+          path: /mnt/pipeline/input
+          type: DirectoryOrCreate
+      - name: output-data
+        hostPath:
+          path: /mnt/pipeline/output
+          type: DirectoryOrCreate
+      - name: logs
+        hostPath:
+          path: /var/log/pipeline
+          type: DirectoryOrCreate
+      - name: tmp
+        emptyDir:
+          sizeLimit: 10Gi
+      nodeSelector:
+        accelerator: nvidia-gpu
+        node-type: gpu-worker
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: dedicated
+        operator: Equal
+        value: pipeline
+        effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - multimodal-pipeline
+              topologyKey: kubernetes.io/hostname
+---
+# Service for pipeline
+apiVersion: v1
+kind: Service
+metadata:
+  name: multimodal-pipeline-service
+  namespace: pipeline-production
+  labels:
+    app: multimodal-pipeline
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  selector:
+    app: multimodal-pipeline
+

@@ -1,0 +1,53 @@
+# Standard Metrics Integration
+# Replaces custom metrics with Prometheus client library
+
+# Use prometheus_client library instead of custom metrics
+# Install: pip install prometheus-client
+
+# Example usage:
+# from prometheus_client import Counter, Gauge, Histogram, start_http_server
+# 
+# pipeline_items_processed = Counter(
+#     'pipeline_items_processed_total',
+#     'Total items processed',
+#     ['stage', 'modality']
+# )
+# 
+# gpu_utilization = Gauge(
+#     'gpu_utilization_percent',
+#     'GPU utilization percentage',
+#     ['gpu_id']
+# )
+# 
+# stage_duration = Histogram(
+#     'stage_duration_seconds',
+#     'Stage execution duration',
+#     ['stage_name'],
+#     buckets=[0.1, 0.5, 1.0, 5.0, 10.0, 30.0]
+# )
+# 
+# start_http_server(9090)
+
+---
+# Standard metric exporters
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metric-exporters
+  namespace: pipeline-production
+data:
+  exporters.yaml: |
+    # Use standard exporters:
+    # - prometheus-client (Python)
+    # - micrometer (Java)
+    # - prometheus (Go)
+    # - prom-client (Node.js)
+    
+    # Standard metric types:
+    # - Counter: Total counts
+    # - Gauge: Current values
+    # - Histogram: Distributions
+    # - Summary: Quantiles
+    
+    # Replace custom PipelineMetrics class with standard library
+
