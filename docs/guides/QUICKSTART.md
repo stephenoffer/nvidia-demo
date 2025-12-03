@@ -36,8 +36,25 @@ print(f"Pipeline completed: {results}")
 
 ### Using Declarative API
 
+**Quick Start (Simplest):**
+
 ```python
-from pipeline.api.declarative import Pipeline
+from pipeline.api import Pipeline
+
+# One-liner pipeline creation
+pipeline = Pipeline.quick_start(
+    input_paths="data/videos/",
+    output_path="data/output/",
+    enable_gpu=False
+)
+
+results = pipeline.run()
+```
+
+**Full Declarative API:**
+
+```python
+from pipeline.api import Pipeline
 
 # Simple declarative API
 pipeline = Pipeline(
@@ -49,7 +66,68 @@ pipeline = Pipeline(
     enable_gpu=False,
 )
 
+# Pythonic features
+print(f"Sources: {len(pipeline)}")  # len() support
+for source in pipeline:  # Iteration
+    print(source)
+if "data/videos/" in pipeline:  # Membership check
+    print("Video source found")
+
 results = pipeline.run()
+```
+
+**Fluent Builder API:**
+
+```python
+from pipeline.api import PipelineBuilder
+
+# Method chaining for complex pipelines
+pipeline = (
+    PipelineBuilder()
+    .add_source("data/videos/")
+    .add_source("data/text/")
+    .enable_gpu(num_gpus=4)
+    .set_batch_size(32)
+    .add_profiler(columns=["image", "text"])
+    .set_output("data/output/")
+    .build()
+)
+
+results = pipeline.run()
+```
+
+**DataFrame API (Pythonic):**
+
+```python
+from pipeline.api import PipelineDataFrame
+
+# Create DataFrame
+df = PipelineDataFrame.from_paths(["data/input/"])
+
+# Use standard Python built-ins
+print(f"Rows: {len(df)}")  # len() support
+print(f"Shape: {df.shape}")  # (rows, columns)
+print(f"Columns: {df.columns}")  # Column names
+
+# Pythonic indexing
+first_10 = df[0:10]  # Slicing (like Pandas)
+column = df["episode_id"]  # Column access
+value = df.episode_id  # Attribute-style access
+
+# Operator overloading
+df1 = PipelineDataFrame.from_paths(["data/data1/"])
+df2 = PipelineDataFrame.from_paths(["data/data2/"])
+combined = df1 + df2  # Concatenate (like pd.concat)
+
+# Lazy transformations
+result = (
+    df
+    .filter(lambda x: x["quality"] > 0.8)
+    .map(lambda x: {**x, "processed": True})
+    .groupby("episode_id")
+    .agg({"sensor_data": "mean"})
+    .collect()  # Trigger execution
+)
 ```
 
 ### With GPU Acceleration

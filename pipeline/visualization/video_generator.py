@@ -204,7 +204,7 @@ class VideoGenerator:
         # Cleanup actors - use Ray's built-in cleanup
         for actor in actors:
             try:
-                ray.kill(actor)
+                ray.kill(actor, no_restart=True)
             except (ValueError, ray.exceptions.RayActorError):
                 pass
 

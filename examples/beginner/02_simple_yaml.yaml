@@ -1,0 +1,18 @@
+# Simple YAML Configuration - Beginner Level
+# 
+# The simplest possible YAML configuration.
+# Uses public S3 video (no credentials needed).
+
+sources:
+  - type: video
+    path: "s3://anonymous@ray-example-data/basketball.mp4"
+    extract_frames: true
+    frame_rate: 30
+
+output: "./output/curated"
+
+# Basic settings
+enable_gpu: false
+num_cpus: 2
+batch_size: 100
+

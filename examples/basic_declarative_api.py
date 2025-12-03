@@ -114,31 +114,30 @@ def main():
             logger.warning("No mock data files found. Please run: python examples/create_mock_data.py")
             sources = [{"type": "parquet", "path": str(data_dir)}]  # Fallback
         
-        # Add public video source for testing
+        # Add public video source for testing (always available, no credentials needed)
         sources.append({
             "type": "video",
             "path": "s3://anonymous@ray-example-data/basketball.mp4",
             "extract_frames": True,
             "frame_rate": 30,
+            "max_frames": 100,  # Limit for faster execution
         })
         
         output_path = str(test_output / "curated")
     else:
-        logger.info("Using S3 data paths (set up S3 credentials if needed)")
+        logger.info("Using public S3 video (no credentials needed)")
         logger.info("To use local mock data, run: python examples/create_mock_data.py")
+        # Use public S3 video (always available, no credentials needed)
         sources = [
             {
                 "type": "video",
                 "path": "s3://anonymous@ray-example-data/basketball.mp4",
                 "extract_frames": True,
                 "frame_rate": 30,
-            },
-            {
-                "type": "parquet",
-                "path": "s3://robotics-data/structured/",
+                "max_frames": 100,  # Limit for faster execution
             },
         ]
-        output_path = "s3://robotics-data/curated/"
+        output_path = str(test_output / "curated")
     
     # Create a simple pipeline with basic data sources
     # Use compute_mode="auto" to automatically detect and use available resources

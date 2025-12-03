@@ -23,6 +23,13 @@ __all__ = [
     "SQLDataLoader",
 ]
 
+# NVIDIA NeMo integration (optional)
+try:
+    from pipeline.integrations.nemo import NeMoEmbeddingGenerator, NeMoTextProcessor
+    __all__.extend(["NeMoEmbeddingGenerator", "NeMoTextProcessor"])
+except ImportError:
+    pass
+
 # MLOps integrations (optional)
 try:
     from pipeline.integrations.mlflow import MLflowTracker, create_mlflow_tracker
@@ -39,5 +46,17 @@ except ImportError:
 try:
     from pipeline.integrations.openlineage import OpenLineageTracker, create_openlineage_tracker
     __all__.extend(["OpenLineageTracker", "create_openlineage_tracker"])
+except ImportError:
+    pass
+
+try:
+    from pipeline.integrations.model_registry import ModelRegistry, create_model_registry
+    __all__.extend(["ModelRegistry", "create_model_registry"])
+except ImportError:
+    pass
+
+try:
+    from pipeline.integrations.feature_store import FeatureStore, create_feature_store
+    __all__.extend(["FeatureStore", "create_feature_store"])
 except ImportError:
     pass

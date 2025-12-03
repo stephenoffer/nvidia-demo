@@ -3,6 +3,7 @@ torch>=2.0.0
 numpy>=1.24.0
 pandas>=2.0.0
 pyarrow>=12.0.0
+duckdb>=0.9.0  # SQL query engine for batch processing
 opencv-python>=4.8.0
 pillow>=10.0.0
 transformers>=4.30.0

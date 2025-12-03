@@ -18,8 +18,8 @@ from ray.data._internal.delegating_block_builder import DelegatingBlockBuilder
 from pipeline.exceptions import DataSourceError, ValidationError, ConfigurationError
 from pipeline.utils.constants import _DEFAULT_BATCH_SIZE
 from pipeline.utils.decorators import handle_errors, log_execution_time
-from pipeline.utils.retry import retry_cloud_storage
-from pipeline.utils.input_validation import InputValidator
+from pipeline.utils.execution.retry import retry_cloud_storage
+from pipeline.utils.validation.input_validation import InputValidator
 
 if TYPE_CHECKING:
     import pyarrow

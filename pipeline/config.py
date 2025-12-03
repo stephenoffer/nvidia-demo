@@ -159,15 +159,11 @@ class PipelineConfig:
         if self.prefetch_buffer_size < 0:
             errors.append("prefetch_buffer_size must be non-negative")
         
-        # Validate compute_mode
-        if self.compute_mode not in ["auto", "cpu", "gpu"]:
-            errors.append("compute_mode must be 'auto', 'cpu', or 'gpu'")
-        
         # Validate prometheus_port
         if not 1024 <= self.prometheus_port <= 65535:
             errors.append("prometheus_port must be between 1024 and 65535")
         
-        # Normalize compute_mode
+        # Normalize and validate compute_mode
         self.compute_mode = (self.compute_mode or "auto").lower()
         if self.compute_mode not in {"auto", "cpu", "gpu"}:
             errors.append("compute_mode must be 'auto', 'cpu', or 'gpu'")

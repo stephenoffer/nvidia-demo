@@ -40,7 +40,7 @@ class PipelineLifecycleManager:
     def _validate_inputs(self) -> None:
         """Validate and sanitize input paths."""
         try:
-            from pipeline.utils.input_validation import validate_inputs
+            from pipeline.utils.validation.input_validation import validate_inputs
 
             is_valid, errors = validate_inputs(self.config.input_paths, self.config.output_path)
             if not is_valid:

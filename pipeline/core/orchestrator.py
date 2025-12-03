@@ -6,7 +6,8 @@ Coordinates data loading, stage execution, and output generation.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Iterator, Optional
 
 import ray
 from ray.data import Dataset
@@ -30,19 +31,22 @@ from pipeline.integrations.cosmos import CosmosDreamsLoader
 from pipeline.integrations.isaac_lab import IsaacLabLoader
 from pipeline.loaders.multimodal import MultimodalLoader
 from pipeline.observability.metrics import PipelineMetrics
-from pipeline.stages.completeness_validator import CompletenessValidator
-from pipeline.stages.cross_modal_validator import CrossModalValidator
-from pipeline.stages.episode_detector import EpisodeBoundaryDetector
-from pipeline.stages.gpu_analytics import GPUAnalyticsStage
-from pipeline.stages.instruction_grounding import InstructionGroundingStage
-from pipeline.stages.physics_validator import PhysicsValidator
-from pipeline.stages.quality_scorer import DataQualityScorer
-from pipeline.stages.sensor import SensorProcessor
-from pipeline.stages.sequence_normalizer import SequenceNormalizer
-from pipeline.stages.temporal_alignment import TemporalAlignmentStage
-from pipeline.stages.text import TextProcessor
-from pipeline.stages.transition_alignment import TransitionAlignmentStage
-from pipeline.stages.video import VideoProcessor
+from pipeline.stages import (
+    CompletenessValidator,
+    CrossModalValidator,
+    DataQualityScorer,
+    EpisodeBoundaryDetector,
+    GPUAnalyticsStage,
+    InstructionGroundingStage,
+    PhysicsValidator,
+    SensorProcessor,
+    SequenceNormalizer,
+    TemporalAlignmentStage,
+    TextProcessor,
+    TransitionAlignmentStage,
+    VideoProcessor,
+)
+from pipeline.stages.base import PipelineStage
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +64,7 @@ class MultimodalPipeline:
             config: Pipeline configuration
         """
         # Sanitize and validate configuration
-        from pipeline.utils.input_validation import InputValidator
+        from pipeline.utils.validation.input_validation import InputValidator
 
         sanitizer = InputValidator(strict=True)
         try:
@@ -156,31 +160,80 @@ class MultimodalPipeline:
                 )
             )
 
-    def add_stage(self, stage: PipelineStage) -> None:
+    def add_stage(self, stage: PipelineStage) -> "MultimodalPipeline":
         """Add a custom processing stage to the pipeline.
 
         Args:
             stage: Processing stage instance
+            
+        Returns:
+            Self for method chaining
+            
+        Raises:
+            TypeError: If stage is not a PipelineStage instance
+            
+        Example:
+            ```python
+            pipeline = MultimodalPipeline(config)
+            pipeline.add_stage(custom_stage).add_stage(another_stage)
+            ```
         """
+        if not isinstance(stage, PipelineStage):
+            raise TypeError(f"stage must be a PipelineStage instance, got {type(stage)}")
         self.stages.append(stage)
+        return self
 
-    def add_simulation_data(self, loader: IsaacLabLoader) -> None:
+    def add_simulation_data(self, loader: IsaacLabLoader) -> "MultimodalPipeline":
         """Add Isaac Lab simulation data loader.
 
         Args:
             loader: Isaac Lab loader instance
+            
+        Returns:
+            Self for method chaining
+            
+        Raises:
+            TypeError: If loader is not an IsaacLabLoader instance
+            
+        Example:
+            ```python
+            from pipeline.integrations.isaac_lab import IsaacLabLoader
+            
+            loader = IsaacLabLoader(simulation_path="path/to/data")
+            pipeline.add_simulation_data(loader).run()
+            ```
         """
+        if not isinstance(loader, IsaacLabLoader):
+            raise TypeError(f"loader must be an IsaacLabLoader instance, got {type(loader)}")
         self.simulation_loaders.append(loader)
         logger.info(f"Added Isaac Lab simulation data loader: {loader.robot_type}")
+        return self
 
-    def add_synthetic_data(self, loader: CosmosDreamsLoader) -> None:
+    def add_synthetic_data(self, loader: CosmosDreamsLoader) -> "MultimodalPipeline":
         """Add Cosmos Dreams synthetic data loader.
 
         Args:
             loader: Cosmos Dreams loader instance
+            
+        Returns:
+            Self for method chaining
+            
+        Raises:
+            TypeError: If loader is not a CosmosDreamsLoader instance
+            
+        Example:
+            ```python
+            from pipeline.integrations.cosmos import CosmosDreamsLoader
+            
+            loader = CosmosDreamsLoader(dreams_path="path/to/dreams")
+            pipeline.add_synthetic_data(loader).run()
+            ```
         """
+        if not isinstance(loader, CosmosDreamsLoader):
+            raise TypeError(f"loader must be a CosmosDreamsLoader instance, got {type(loader)}")
         self.synthetic_loaders.append(loader)
         logger.info(f"Added Cosmos Dreams synthetic data loader: {loader.model_name}")
+        return self
 
     def add_omniverse_data(self, loader: Any) -> None:  # TODO: Create OmniverseLoader type
         """Add Omniverse USD/Replicator data loader.
@@ -201,24 +254,54 @@ class MultimodalPipeline:
 
         Args:
             generator: Synthetic data generator instance
+            
+        Raises:
+            TypeError: If generator is None or invalid
         """
+        if generator is None:
+            raise TypeError("generator cannot be None")
+        if not hasattr(generator, 'generate'):
+            raise TypeError(f"generator must have a 'generate' method, got {type(generator)}")
         self.synthetic_generators.append(generator)
         logger.info(f"Added synthetic data generator: {generator.__class__.__name__}")
 
     def enable_visualization(
         self,
-        video_resolution: tuple = (1280, 720),
+        video_resolution: tuple[int, int] = (1280, 720),
         video_fps: int = 30,
         dashboard_mode: str = "local",
-    ) -> None:
+    ) -> "MultimodalPipeline":
         """Enable visualization features.
 
         Args:
-            video_resolution: Resolution for generated videos
+            video_resolution: Resolution for generated videos (width, height)
             video_fps: Frames per second for videos
             dashboard_mode: Dashboard mode ('local' or 'web')
+            
+        Returns:
+            Self for method chaining
+            
+        Raises:
+            ValueError: If video_resolution or video_fps are invalid
+            
+        Example:
+            ```python
+            pipeline.enable_visualization(
+                video_resolution=(1920, 1080),
+                video_fps=60
+            ).run()
+            ```
         """
+        if not isinstance(video_resolution, tuple) or len(video_resolution) != 2:
+            raise ValueError(f"video_resolution must be a tuple of (width, height), got {video_resolution}")
+        if not all(isinstance(dim, int) and dim > 0 for dim in video_resolution):
+            raise ValueError(f"video_resolution dimensions must be positive integers, got {video_resolution}")
+        if not isinstance(video_fps, int) or video_fps <= 0:
+            raise ValueError(f"video_fps must be a positive integer, got {video_fps}")
+        if dashboard_mode not in {"local", "web"}:
+            raise ValueError(f"dashboard_mode must be 'local' or 'web', got {dashboard_mode}")
         self.visualization.enable_visualization(video_resolution, video_fps, dashboard_mode)
+        return self
 
     def run(self, resume_from_checkpoint: Optional[str] = None) -> dict[str, Any]:
         """Execute the complete pipeline.
@@ -228,7 +311,29 @@ class MultimodalPipeline:
 
         Returns:
             Dictionary containing pipeline results and metrics
+            
+        Raises:
+            PipelineError: If pipeline execution fails
+            CheckpointError: If checkpoint resume fails
+            DataLoadError: If data loading fails
+            StorageError: If output writing fails
+            ValueError: If resume_from_checkpoint is provided but checkpoint_dir not configured
+            
+        Example:
+            ```python
+            from pipeline import MultimodalPipeline, PipelineConfig
+            
+            config = PipelineConfig(
+                input_paths=["s3://bucket/input/"],
+                output_path="s3://bucket/output/",
+            )
+            pipeline = MultimodalPipeline(config)
+            results = pipeline.run()
+            ```
         """
+        if resume_from_checkpoint and not getattr(self.config, 'checkpoint_dir', None):
+            raise ValueError("resume_from_checkpoint requires checkpoint_dir to be configured")
+        
         logger.info("Starting multimodal data curation pipeline")
         
         # Set random seed for reproducibility if configured
@@ -247,7 +352,7 @@ class MultimodalPipeline:
         start_stage_index = 0
         if resume_from_checkpoint:
             try:
-                from pipeline.utils.checkpoint import PipelineCheckpoint
+                from pipeline.utils.execution.checkpoint import PipelineCheckpoint
                 
                 checkpoint_dir = getattr(self.config, 'checkpoint_dir', None)
                 if not checkpoint_dir:
@@ -274,26 +379,19 @@ class MultimodalPipeline:
                 
                 # Add data lineage tracking if enabled
                 if getattr(self.config, 'enable_lineage_tracking', True):
-                    try:
-                        from pipeline.integrations.openlineage import create_openlineage_tracker
-                        import uuid
-                        
-                        lineage_tracker = create_openlineage_tracker(enabled=True)
-                        source_paths = self.config.input_paths or ["unknown"]
-                        output_path = self.config.output_path or "unknown"
-                        
-                        # Track lineage for this pipeline run
-                        run_id = lineage_tracker.track_lineage(
-                            stage_name="data-loading",
-                            input_paths=source_paths,
-                            output_path=output_path,
-                            metadata={"pipeline_config": str(self.config.__dict__)},
-                        )
-                        logger.info(f"Tracked data lineage: run_id={run_id}")
-                    except ImportError:
-                        logger.warning("OpenLineage not available, skipping lineage tracking")
-                    except (IOError, OSError, RuntimeError) as e:
-                        logger.warning(f"Failed to track lineage: {e}")
+                    from pipeline.integrations.openlineage import create_openlineage_tracker
+                    
+                    lineage_tracker = create_openlineage_tracker(enabled=True)
+                    source_paths = self.config.input_paths or ["unknown"]
+                    output_path = self.config.output_path or "unknown"
+                    
+                    run_id = lineage_tracker.track_lineage(
+                        stage_name="data-loading",
+                        input_paths=source_paths,
+                        output_path=output_path,
+                        metadata={"pipeline_config": str(self.config.__dict__)},
+                    )
+                    logger.info(f"Tracked data lineage: run_id={run_id}")
             
             # Execute remaining stages
             remaining_stages = self.stages[start_stage_index:]
@@ -307,298 +405,172 @@ class MultimodalPipeline:
                 
                 # Export Grafana dashboard if enabled
                 if getattr(self.config, 'enable_grafana', True):
-                    try:
-                        from pipeline.observability.grafana import create_grafana_dashboard
-                        from pathlib import Path
-                        
-                        dashboard_path = Path(self.config.output_path).parent / "grafana_dashboard.json"
-                        create_grafana_dashboard(
-                            datasource_name="Prometheus",
-                            output_path=str(dashboard_path),
-                        )
-                        logger.info(f"Grafana dashboard exported to {dashboard_path}")
-                    except (IOError, OSError, RuntimeError) as e:
-                        logger.warning(f"Failed to export Grafana dashboard: {e}")
+                    from pipeline.observability.grafana import create_grafana_dashboard
+                    from pathlib import Path
+                    
+                    dashboard_path = Path(self.config.output_path).parent / "grafana_dashboard.json"
+                    create_grafana_dashboard(
+                        datasource_name="Prometheus",
+                        output_path=str(dashboard_path),
+                    )
+                    logger.info(f"Grafana dashboard exported to {dashboard_path}")
 
             logger.info("Pipeline completed successfully")
             return results
 
-        except (PipelineError, ValueError, RuntimeError, IOError, OSError) as e:
+        except Exception as e:
             logger.error(f"Pipeline failed: {e}", exc_info=True)
             self.metrics.record_error(str(e))
             if isinstance(e, PipelineError):
                 raise
             raise PipelineError(f"Pipeline execution failed: {e}") from e
+        finally:
+            self.metrics.stop()
 
     def _create_version_record(self) -> None:
         """Create data version record using MLflow."""
-        try:
-            # Use MLflow for data versioning if available
-            from pipeline.integrations.mlflow import create_mlflow_tracker
-            
-            mlflow_tracker = create_mlflow_tracker(enabled=True)
-            if mlflow_tracker.enabled:
-                mlflow_tracker.start_run()
-                mlflow_tracker.log_data_version(
-                    input_paths=self.config.input_paths or [],
-                    output_path=self.config.output_path or "",
-                )
-                pipeline_config_dict = {
-                    "num_gpus": self.config.num_gpus,
-                    "num_cpus": self.config.num_cpus,
-                    "batch_size": self.config.batch_size,
-                    "dedup_method": self.config.dedup_method,
-                }
-                mlflow_tracker.log_params(pipeline_config_dict)
-                logger.info("Logged data version to MLflow")
-            else:
-                # Fallback: log warning if MLflow not available
-                logger.warning("MLflow not available, skipping data versioning")
-        except (ImportError, IOError, OSError, StorageError) as e:
-            logger.warning(f"Failed to create version record: {e}")
+        from pipeline.integrations.mlflow import create_mlflow_tracker
+        
+        mlflow_tracker = create_mlflow_tracker(enabled=True)
+        if mlflow_tracker.enabled:
+            mlflow_tracker.start_run()
+            mlflow_tracker.log_data_version(
+                input_paths=self.config.input_paths or [],
+                output_path=self.config.output_path or "",
+            )
+            pipeline_config_dict = {
+                "num_gpus": self.config.num_gpus,
+                "num_cpus": self.config.num_cpus,
+                "batch_size": self.config.batch_size,
+                "dedup_method": self.config.dedup_method,
+            }
+            mlflow_tracker.log_params(pipeline_config_dict)
+            logger.info("Logged data version to MLflow")
 
     def _load_all_data(self) -> Dataset:
-        """Load data from all sources with graceful degradation.
+        """Load data from all sources.
 
         Returns:
             Combined dataset from all sources
+            
+        Raises:
+            DataLoadError: If data loading fails
         """
-        # Apply incremental processing if enabled
-        input_paths = self.config.input_paths
-        enable_incremental = getattr(self.config, "enable_incremental_processing", True)
+        logger.info(f"Loading data from {len(self.config.input_paths)} sources")
         
-        if enable_incremental:
-            try:
-                from pipeline.utils.incremental import create_incremental_processor
-                from pathlib import Path
-                
-                state_dir = str(Path(self.config.output_path).parent / ".incremental_state")
-                incremental_processor = create_incremental_processor(
-                    state_dir=state_dir,
-                    enable_incremental=True,
-                )
-                
-                # Filter to only unprocessed files
-                input_paths = incremental_processor.filter_unprocessed(
-                    input_paths,
-                    compute_hashes=True,
-                )
-                
-                # Save state after filtering
-                incremental_processor.save()
-                
-                logger.info(
-                    f"Incremental processing: {len(self.config.input_paths)} total paths, "
-                    f"{len(input_paths)} unprocessed"
-                )
-            except (IOError, OSError, StorageError, RuntimeError) as e:
-                logger.warning(f"Incremental processing failed, processing all files: {e}")
-                input_paths = self.config.input_paths
-        
-        logger.info(f"Loading data from {len(input_paths)} sources")
-        
-        # Load main data sources with graceful degradation
-        from pipeline.utils.partial_failure import PartialFailureHandler
-
-        failure_handler = PartialFailureHandler(continue_on_failure=True)
-
-        # Load main data sources
-        dataset = failure_handler.execute_with_fallback(
-            func=lambda: self.loader.load(input_paths),
-            fallback_value=ray.data.from_items([]),
-            error_context="Main data loading",
-        )
-
-        # Load additional sources with graceful degradation
-        dataset = self._load_simulation_data(dataset, failure_handler)
-        dataset = self._load_synthetic_data(dataset, failure_handler)
-        dataset = self._load_omniverse_data(dataset, failure_handler)
-        dataset = self._load_synthetic_generators(dataset, failure_handler)
-
-        # Log available modalities without materializing dataset
-        # Use iter_batches with limit=1 to sample without full materialization
-        try:
-            sample_batch = next(dataset.iter_batches(batch_size=1, prefetch_batches=0), None)
-            if sample_batch is not None:
-                sample = sample_batch.iloc[0].to_dict() if hasattr(sample_batch, 'iloc') else sample_batch[0] if isinstance(sample_batch, list) else sample_batch
-                from pipeline.utils.data_types import detect_modalities
-                modalities = detect_modalities(sample)
-                logger.info(f"Loaded data with modalities: {[m.value for m in modalities]}")
-        except (StopIteration, IndexError, AttributeError, TypeError) as e:
-            logger.debug(f"Could not sample dataset for modality detection: {e}")
+        dataset = self.loader.load(self.config.input_paths)
+        dataset = self._load_simulation_data(dataset)
+        dataset = self._load_synthetic_data(dataset)
+        dataset = self._load_omniverse_data(dataset)
+        dataset = self._load_synthetic_generators(dataset)
 
         return dataset
 
-    def _load_simulation_data(self, dataset: Dataset, failure_handler: PartialFailureHandler) -> Dataset:
+    def _load_simulation_data(self, dataset: Dataset) -> Dataset:
         """Load Isaac Lab simulation data.
 
         Args:
             dataset: Current dataset
-            failure_handler: Failure handler instance
 
         Returns:
             Dataset with simulation data added
+            
+        Raises:
+            DataLoadError: If simulation data loading fails
         """
         if not self.simulation_loaders:
             return dataset
 
         simulation_datasets = []
         for loader in self.simulation_loaders:
-            sim_ds = failure_handler.execute_with_fallback(
-                func=lambda l=loader: l.load(),
-                fallback_value=None,
-                error_context=f"Isaac Lab load from {loader.simulation_path}",
-            )
-            if sim_ds is not None:
-                simulation_datasets.append(sim_ds)
-            else:
-                self.metrics.record_error(f"Isaac Lab load failed from {loader.simulation_path}")
+            sim_ds = loader.load()
+            simulation_datasets.append(sim_ds)
 
-        if simulation_datasets:
-            return self._add_datasets(dataset, simulation_datasets, "Isaac Lab")
-        return dataset
+        return self._add_datasets(dataset, simulation_datasets, "Isaac Lab")
 
-    def _load_synthetic_data(self, dataset: Dataset, failure_handler: PartialFailureHandler) -> Dataset:
+    def _load_synthetic_data(self, dataset: Dataset) -> Dataset:
         """Load Cosmos Dreams synthetic data.
 
         Args:
             dataset: Current dataset
-            failure_handler: Failure handler instance
 
         Returns:
             Dataset with synthetic data added
+            
+        Raises:
+            DataLoadError: If synthetic data loading fails
         """
         if not self.synthetic_loaders:
             return dataset
 
         synthetic_datasets = []
         for loader in self.synthetic_loaders:
-            synth_ds = failure_handler.execute_with_fallback(
-                func=lambda l=loader: l.load(),
-                fallback_value=None,
-                error_context=f"Cosmos Dreams load from {loader.dreams_path}",
-            )
-            if synth_ds is not None:
-                synthetic_datasets.append(synth_ds)
-            else:
-                self.metrics.record_error(f"Cosmos Dreams load failed from {loader.dreams_path}")
+            synth_ds = loader.load()
+            synthetic_datasets.append(synth_ds)
 
-        if synthetic_datasets:
-            return self._add_datasets(dataset, synthetic_datasets, "Cosmos Dreams")
-        return dataset
+        return self._add_datasets(dataset, synthetic_datasets, "Cosmos Dreams")
 
-    def _load_omniverse_data(self, dataset: Dataset, failure_handler: PartialFailureHandler) -> Dataset:
+    def _load_omniverse_data(self, dataset: Dataset) -> Dataset:
         """Load Omniverse USD and Replicator data.
 
         Args:
             dataset: Current dataset
-            failure_handler: Failure handler instance
 
         Returns:
             Dataset with Omniverse data added
+            
+        Raises:
+            DataLoadError: If Omniverse data loading fails
         """
-        # Load from configured paths
-        if hasattr(self.config, "omniverse_paths") and self.config.omniverse_paths:
-            try:
-                from pipeline.integrations.omniverse import OmniverseLoader
-                import ray.data
-                from pathlib import Path
+        if not self.omniverse_loaders:
+            return dataset
 
-                omniverse_items = []
-                for omniverse_path in self.config.omniverse_paths:
-                    loader = OmniverseLoader(
-                        omniverse_path=omniverse_path,
-                        include_metadata=True,
-                        include_annotations=True,
-                    )
-                    
-                    # Load USD files
-                    usd_files = list(Path(omniverse_path).glob("*.usd")) + list(Path(omniverse_path).glob("*.usda")) + list(Path(omniverse_path).glob("*.usdc"))
-                    for usd_file in usd_files:
-                        items = loader.load_usd_scene(str(usd_file))
-                        omniverse_items.extend(items)
-                    
-                    # Load Replicator data if available
-                    replicator_path = Path(omniverse_path) / "replicator_output"
-                    if replicator_path.exists():
-                        replicator_items = loader.load_replicator_data(str(replicator_path))
-                        omniverse_items.extend(replicator_items)
+        omniverse_datasets = []
+        for loader in self.omniverse_loaders:
+            from pathlib import Path
+            import ray.data
 
-                if omniverse_items:
-                    omniverse_dataset = ray.data.from_items(omniverse_items)
-                    dataset = dataset.union(omniverse_dataset)
-                    logger.info(f"Loaded {len(omniverse_items)} items from Omniverse")
-            except (DataLoadError, IOError, OSError, RuntimeError) as e:
-                dataset = failure_handler.execute_with_fallback(
-                    func=lambda: dataset,
-                    fallback_value=dataset,
-                    error_context="Omniverse loading from config paths",
-                )
+            omniverse_items = []
+            usd_files = list(Path(loader.omniverse_path).glob("*.usd")) + list(Path(loader.omniverse_path).glob("*.usda")) + list(Path(loader.omniverse_path).glob("*.usdc"))
+            for usd_file in usd_files:
+                items = loader.load_usd_scene(str(usd_file))
+                omniverse_items.extend(items)
+            
+            replicator_path = Path(loader.omniverse_path) / "replicator_output"
+            if replicator_path.exists():
+                replicator_items = loader.load_replicator_data(str(replicator_path))
+                omniverse_items.extend(replicator_items)
 
-        # Load from added loaders
-        if self.omniverse_loaders:
-            omniverse_datasets = []
-            for loader in self.omniverse_loaders:
-                try:
-                    from pathlib import Path
-                    import ray.data
+            if omniverse_items:
+                omniverse_dataset = ray.data.from_items(omniverse_items)
+                omniverse_datasets.append(omniverse_dataset)
 
-                    omniverse_items = []
-                    # Load USD files
-                    usd_files = list(Path(loader.omniverse_path).glob("*.usd")) + list(Path(loader.omniverse_path).glob("*.usda")) + list(Path(loader.omniverse_path).glob("*.usdc"))
-                    for usd_file in usd_files:
-                        items = loader.load_usd_scene(str(usd_file))
-                        omniverse_items.extend(items)
-                    
-                    # Load Replicator data if available
-                    replicator_path = Path(loader.omniverse_path) / "replicator_output"
-                    if replicator_path.exists():
-                        replicator_items = loader.load_replicator_data(str(replicator_path))
-                        omniverse_items.extend(replicator_items)
-
-                    if omniverse_items:
-                        omniverse_dataset = ray.data.from_items(omniverse_items)
-                        omniverse_datasets.append(omniverse_dataset)
-                except (DataLoadError, IOError, OSError, RuntimeError) as e:
-                    failure_handler.execute_with_fallback(
-                        func=lambda: None,
-                        fallback_value=None,
-                        error_context=f"Omniverse load from {loader.omniverse_path}",
-                    )
-
-            if omniverse_datasets:
-                return self._add_datasets(dataset, omniverse_datasets, "Omniverse")
-
+        if omniverse_datasets:
+            return self._add_datasets(dataset, omniverse_datasets, "Omniverse")
+        
         return dataset
 
-    def _load_synthetic_generators(self, dataset: Dataset, failure_handler: PartialFailureHandler) -> Dataset:
+    def _load_synthetic_generators(self, dataset: Dataset) -> Dataset:
         """Load synthetic generator data.
 
         Args:
             dataset: Current dataset
-            failure_handler: Failure handler instance
 
         Returns:
             Dataset with generator data added
+            
+        Raises:
+            DataLoadError: If synthetic generation fails
         """
         if not self.synthetic_generators:
             return dataset
 
         generator_datasets = []
         for generator in self.synthetic_generators:
-            gen_ds = failure_handler.execute_with_fallback(
-                func=lambda g=generator: g.generate(),
-                fallback_value=None,
-                error_context=f"Synthetic generation from {generator.__class__.__name__}",
-            )
-            if gen_ds is not None:
-                generator_datasets.append(gen_ds)
-            else:
-                self.metrics.record_error(f"Synthetic generation failed from {generator.__class__.__name__}")
+            gen_ds = generator.generate()
+            generator_datasets.append(gen_ds)
 
-        if generator_datasets:
-            return self._add_datasets(dataset, generator_datasets, "synthetic generators")
-        return dataset
+        return self._add_datasets(dataset, generator_datasets, "synthetic generators")
 
     def _add_datasets(
         self,
@@ -646,20 +618,88 @@ class MultimodalPipeline:
         Returns:
             Dictionary of pipeline results
         """
-        try:
-            results = self.metrics.finish()
-            results["output_path"] = self.config.output_path
-            results["total_stages"] = len(self.stages)
-            return results
-        except (AttributeError, KeyError, TypeError, MetricsError) as e:
-            logger.error(f"Error collecting metrics: {e}", exc_info=True)
-            return {
-                "output_path": self.config.output_path,
-                "total_stages": len(self.stages),
-                "error": "Failed to collect metrics",
-            }
+        results = self.metrics.finish()
+        results["output_path"] = self.config.output_path
+        results["total_stages"] = len(self.stages)
+        return results
 
     def shutdown(self) -> None:
-        """Shutdown pipeline and cleanup resources."""
-        self.lifecycle.shutdown()
+        """Shutdown pipeline and cleanup resources.
+        
+        Ensures all resources are properly cleaned up including:
+        - Ray actors and tasks
+        - GPU memory
+        - File handles and temporary files
+        - Health check servers
+        """
+        try:
+            self.lifecycle.shutdown()
+        except Exception as e:
+            logger.error(f"Error during pipeline shutdown: {e}", exc_info=True)
+            # Continue cleanup even if errors occur
+    
+    def __enter__(self) -> "MultimodalPipeline":
+        """Context manager entry.
+        
+        Returns:
+            Self for use in 'with' statement
+        """
+        return self
+    
+    def __exit__(self, exc_type: Optional[type[Exception]], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
+        """Context manager exit.
+        
+        Ensures cleanup happens even if exceptions occur.
+        
+        Args:
+            exc_type: Exception type if exception occurred
+            exc_val: Exception value if exception occurred
+            exc_tb: Exception traceback if exception occurred
+        """
+        self.shutdown()
+    
+    @classmethod
+    def create(cls, input_paths: list[str], output_path: str, **kwargs: Any) -> "MultimodalPipeline":
+        """Create a pipeline with a simple configuration.
+        
+        Convenience factory method for quick pipeline setup.
+        
+        Args:
+            input_paths: List of input data paths
+            output_path: Output path for curated data
+            **kwargs: Additional configuration options (num_gpus, batch_size, etc.)
+            
+        Returns:
+            Configured MultimodalPipeline instance
+            
+        Example:
+            ```python
+            pipeline = MultimodalPipeline.create(
+                input_paths=["s3://bucket/input/"],
+                output_path="s3://bucket/output/",
+                num_gpus=4,
+            )
+            results = pipeline.run()
+            ```
+        """
+        from pipeline.config import PipelineConfig
+        
+        config = PipelineConfig(
+            input_paths=input_paths,
+            output_path=output_path,
+            **kwargs,
+        )
+        return cls(config)
+    
+    
+    def get_status(self) -> dict[str, Any]:
+        """Get current pipeline status.
+        
+        Returns:
+            Dictionary with pipeline status information
+        """
+        return {
+            "num_stages": len(self.stages),
+            "output_path": self.config.output_path,
+        }
 

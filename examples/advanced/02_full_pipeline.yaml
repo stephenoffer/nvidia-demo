@@ -1,0 +1,56 @@
+# Full Pipeline Configuration - Advanced Level
+#
+# Demonstrates:
+# - Multiple data source types
+# - Real data sources (public S3 video + local test data)
+# - Data quality checks (profiling, validation)
+# - Advanced deduplication
+# - Checkpointing
+
+sources:
+  # Public S3 video (no credentials needed)
+  - type: video
+    path: "s3://anonymous@ray-example-data/basketball.mp4"
+    extract_frames: true
+    frame_rate: 30
+    max_frames: 100
+  
+  # Local test data (uncomment if available)
+  # - type: parquet
+  #   path: "../data/parquet/mock_data.parquet"
+  # - type: groot
+  #   path: "../data/"
+
+# Output configuration
+output: "./output/curated"
+
+# Compute configuration
+enable_gpu: false  # Set to true if GPU available
+num_cpus: 4
+batch_size: 128
+
+# Execution configuration
+streaming: true
+dedup_method: "fuzzy"
+similarity_threshold: 0.95
+
+# Data quality stages
+stages:
+  # Data profiling
+  - profiler:
+      profile_columns:
+        - "image"
+        - "frame_id"
+      use_gpu: false
+  
+  # Schema validation
+  - validator:
+      expected_schema:
+        frame_id: int
+        image: list
+      strict: false
+
+# Checkpointing
+checkpoint_interval: 1000
+enable_checkpointing: true
+

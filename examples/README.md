@@ -1,155 +1,229 @@
 # Examples
 
-This directory contains essential examples demonstrating how to use the multimodal data pipeline.
+This directory contains examples organized by complexity level, demonstrating both Python and YAML APIs using **real data sources**.
+
+## Directory Structure
+
+```
+examples/
+├── beginner/          # Simplest examples for first-time users
+├── intermediate/      # Examples with multiple features
+├── advanced/          # Full-featured examples with MLOps
+├── yaml/              # YAML utilities and runners
+├── data/              # Test data files
+└── [specialized]      # Specialized examples (training, MLOps, etc.)
+```
 
 ## Quick Start
 
-### 1. YAML Configuration Example
+All examples use **real data**:
+- **Public S3 video**: `s3://anonymous@ray-example-data/basketball.mp4` (no credentials needed)
+- **Local test data**: Automatically detected if available in `data/` directory
 
-The simplest way to get started is using YAML configuration:
+## Example Organization
 
+Examples are organized into three complexity levels:
+
+### Beginner Level (`beginner/`)
+
+**Simplest examples to get started:**
+
+1. **Simple Python** (`beginner/01_simple_python.py`)
+   ```bash
+   python examples/beginner/01_simple_python.py
+   ```
+   - One-liner pipeline creation
+   - Uses public S3 video (`s3://anonymous@ray-example-data/basketball.mp4`)
+   - Minimal configuration
+   - **Real data**: Public S3 video (no credentials needed)
+
+2. **Simple YAML** (`beginner/02_simple_yaml.yaml` + `beginner/02_simple_yaml.py`)
+   ```bash
+   python examples/beginner/02_simple_yaml.py
+   ```
+   - Simplest YAML configuration
+   - Uses public S3 video
+   - Perfect for YAML users
+   - **Real data**: Public S3 video (no credentials needed)
+
+### Intermediate Level (`intermediate/`)
+
+**Examples with multiple sources and features:**
+
+1. **Multiple Sources** (`intermediate/01_multiple_sources.py`)
+   ```bash
+   python examples/intermediate/01_multiple_sources.py
+   ```
+   - Multiple data sources
+   - Public S3 video + local test data (auto-detected)
+   - GPU acceleration (if available)
+   - Result inspection
+   - **Real data**: Public S3 video + local test data
+
+2. **Multiple Sources YAML** (`intermediate/02_multiple_sources.yaml`)
+   ```bash
+   python examples/yaml/run_yaml.py intermediate/02_multiple_sources.yaml
+   ```
+   - YAML version of multiple sources example
+   - Same features as Python version
+   - **Real data**: Public S3 video + local test data
+
+3. **DataFrame API** (`intermediate/03_dataframe_api.py`)
+   ```bash
+   python examples/intermediate/03_dataframe_api.py
+   ```
+   - Pythonic DataFrame API
+   - Standard Python built-ins (`len()`, `iter()`, etc.)
+   - Operator overloading (`+`, `|`, etc.)
+   - Indexing and slicing (`df[0:10]`, `df.column`)
+   - **Real data**: Demonstrates with test data
+
+### Advanced Level (`advanced/`)
+
+**Full-featured examples with MLOps integration:**
+
+1. **Full Pipeline** (`advanced/01_full_pipeline.py`)
+   ```bash
+   python examples/advanced/01_full_pipeline.py
+   ```
+   - Complex multi-source pipeline
+   - Data quality checks (profiling, validation)
+   - Experiment tracking (MLflow/W&B)
+   - Advanced configuration
+   - **Real data**: Public S3 video + local test data
+
+2. **Full Pipeline YAML** (`advanced/02_full_pipeline.yaml`)
+   ```bash
+   python examples/yaml/run_yaml.py advanced/02_full_pipeline.yaml
+   ```
+   - YAML version with all advanced features
+   - MLOps integration
+   - Data quality stages
+   - **Real data**: Public S3 video + local test data
+
+## Data Sources
+
+All examples use **real data**:
+
+### Public S3 Video (Always Available)
+- **Path**: `s3://anonymous@ray-example-data/basketball.mp4`
+- **No credentials needed**
+- **Used in**: All beginner and intermediate examples
+
+### Local Test Data (Optional)
+- **Location**: `examples/data/`
+- **Formats**: Parquet, JSONL, HDF5
+- **Auto-detected**: Examples automatically use local data if available
+- **Create test data**: Run `python examples/create_mock_data.py`
+
+## Running Examples
+
+### Python Examples
 ```bash
-python examples/declarative_yaml.py
+# Beginner - Simplest example
+python examples/beginner/01_simple_python.py
+
+# Intermediate - Multiple sources
+python examples/intermediate/01_multiple_sources.py
+
+# Advanced - Full pipeline with MLOps
+python examples/advanced/01_full_pipeline.py
 ```
 
-This example loads a pipeline configuration from `pipeline_config.yaml` and runs it. The YAML file demonstrates all supported data source types and configuration options.
-
-**Files:**
-- `declarative_yaml.py` - Example script
-- `pipeline_config.yaml` - Complete YAML configuration example
-
-### 2. Basic Declarative API Example
-
-Simple Python API example for basic use cases:
-
+### YAML Examples
 ```bash
-python examples/basic_declarative_api.py
+# Using the YAML runner (from project root)
+python examples/yaml/run_yaml.py beginner/02_simple_yaml.yaml
+python examples/yaml/run_yaml.py intermediate/02_multiple_sources.yaml
+python examples/yaml/run_yaml.py advanced/02_full_pipeline.yaml
+
+# Or from examples directory
+cd examples
+python yaml/run_yaml.py beginner/02_simple_yaml.yaml
+python yaml/run_yaml.py intermediate/02_multiple_sources.yaml
+python yaml/run_yaml.py advanced/02_full_pipeline.yaml
 ```
 
-Demonstrates:
-- Basic pipeline configuration
-- Simple data sources (video, parquet)
-- GPU acceleration
-- Streaming execution
+## Example Files Reference
 
-**File:** `basic_declarative_api.py`
+### Beginner Level (`beginner/`)
+| File | Description | Data Source |
+|------|-------------|-------------|
+| `01_simple_python.py` | Simplest Python example (one-liner) | Public S3 video |
+| `02_simple_yaml.yaml` | Simplest YAML configuration | Public S3 video |
+| `02_simple_yaml.py` | YAML runner script | Public S3 video |
 
-### 3. Advanced Declarative API Example
+### Intermediate Level (`intermediate/`)
+| File | Description | Data Source |
+|------|-------------|-------------|
+| `01_multiple_sources.py` | Multiple data sources | Public S3 video + local |
+| `02_multiple_sources.yaml` | Multiple sources YAML | Public S3 video + local |
+| `03_dataframe_api.py` | DataFrame API with Pythonic features | Test data |
 
-Advanced Python API example with complex configurations:
+### Advanced Level (`advanced/`)
+| File | Description | Data Source |
+|------|-------------|-------------|
+| `01_full_pipeline.py` | Full pipeline with MLOps | Public S3 video + local |
+| `02_full_pipeline.yaml` | Full pipeline YAML | Public S3 video + local |
 
-```bash
-python examples/advanced_declarative_api.py
-```
-
-Demonstrates:
-- Multiple data source types (video, MCAP, HDF5, point clouds, etc.)
-- GPU-accelerated deduplication
-- Isaac Lab and Cosmos Dreams integration
-- Advanced configuration options
-- YAML export functionality
-
-**File:** `advanced_declarative_api.py`
-
-### 4. Model Training Example
-
-Complete example of training the GR00T Vision-Language-Action (VLA) foundation model:
-
-```bash
-python examples/groot_model_training.py
-```
-
-Demonstrates:
-- Full GR00T model architecture (System 2 VLM + System 1 Diffusion)
-- Ray Data for data processing
-- Ray Train for distributed training
-- Latest NVIDIA GPU optimizations (Flash Attention, FSDP, mixed precision)
-- Latest Ray features (streaming, GPU object store, RDMA)
-
-**File:** `groot_model_training.py`
-
-## Example Files
-
+### YAML Utilities (`yaml/`)
 | File | Description |
 |------|-------------|
-| `declarative_yaml.py` | YAML-based pipeline configuration |
-| `pipeline_config.yaml` | Complete YAML configuration example |
-| `basic_declarative_api.py` | Simple Python API example |
-| `advanced_declarative_api.py` | Advanced Python API example |
-| `groot_model_training.py` | Complete model training example |
+| `run_yaml.py` | Universal YAML runner for any config file |
 
-## Data Directory
+### Specialized Examples (Root Level)
+| File | Description | Data Source |
+|------|-------------|-------------|
+| `dataframe_api_example.py` | Comprehensive DataFrame API examples | Various |
+| `fluent_api_example.py` | Fluent Builder API examples | Various |
+| `api_quick_start.py` | Quick start examples for all APIs | Various |
+| `groot_model_training.py` | Complete GR00T model training | Training data |
+| `mlops_batch_inference.py` | MLOps batch inference | Inference data |
+| `wandb_example.py` | Weights & Biases integration | Various |
+| `basic_declarative_api.py` | Basic declarative API (legacy) | Public S3 video + local |
+| `advanced_declarative_api.py` | Advanced declarative API (legacy) | Public S3 video + local |
+| `declarative_yaml.py` | YAML loader (legacy) | From YAML config |
+| `pipeline_config.yaml` | Complete YAML reference | Various |
 
-The `data/` directory contains sample data files for testing:
-- Test archives, binaries, calibration files
-- Sample HDF5, MessagePack, Protobuf files
-- Point cloud data (PCD, PLY formats)
-- URDF robot models
-- JSONL test data
+## Creating Test Data
 
-## Getting Started
+To create local test data for examples (optional):
 
-1. **Start with YAML**: Run `declarative_yaml.py` to see a complete example
-2. **Try Basic API**: Run `basic_declarative_api.py` for simple use cases
-3. **Explore Advanced**: Run `advanced_declarative_api.py` for complex scenarios
-4. **Train Models**: Run `groot_model_training.py` for full model training
+```bash
+python examples/create_mock_data.py
+```
+
+This creates test files in `examples/data/`:
+- `parquet/mock_data.parquet`
+- `jsonl/mock_data.jsonl`
+- `hdf5/mock_sensor_data.h5`
+- And more...
+
+**Note:** Examples work without local test data - they use the public S3 video by default.
+Local test data is automatically detected and used if available.
 
 ## Configuration
 
-All examples use the same underlying pipeline configuration system. You can:
-- Configure pipelines via YAML files
-- Configure pipelines via Python API
-- Export Python configurations to YAML
-- Load YAML configurations in Python
+All examples:
+- **Use real data** (public S3 video or local test data)
+- **Auto-detect** available resources (CPU/GPU)
+- **Work out of the box** with minimal setup
+- **Provide clear output** showing what was processed
 
-See `pipeline_config.yaml` for a complete reference of all configuration options.
+## Next Steps
 
-## Visualization
+1. **Start with beginner examples** (`beginner/`) to understand the basics
+2. **Try intermediate examples** (`intermediate/`) to see multiple features
+3. **Explore advanced examples** (`advanced/`) for full MLOps integration
+4. **Check specialized examples** (root level) for specific use cases
 
-The pipeline uses **Grafana** as the primary visualization tool for production-grade monitoring:
+## Quick Reference
 
-- **Grafana Dashboard**: Automatically generated JSON configuration that can be imported into Grafana
-- **Prometheus Integration**: Metrics are exported to Prometheus for real-time monitoring
-- **Alert Rules**: Prometheus alert rules are generated for automated alerting
-- **HTML Summary**: A simple HTML summary page is created with instructions for Grafana setup
+- **Simplest Python**: `python examples/beginner/01_simple_python.py`
+- **Simplest YAML**: `python examples/beginner/02_simple_yaml.py`
+- **Multiple Sources**: `python examples/intermediate/01_multiple_sources.py`
+- **DataFrame API**: `python examples/intermediate/03_dataframe_api.py`
+- **Full Pipeline**: `python examples/advanced/01_full_pipeline.py`
+- **YAML Runner**: `python examples/yaml/run_yaml.py <config.yaml>`
 
-After running an example, you'll find:
-- `grafana_dashboard.json` - Grafana dashboard configuration (import into Grafana)
-- `prometheus_alerts.json` - Prometheus alert rules (import into Alertmanager)
-- `pipeline_summary.html` - HTML summary with Grafana setup instructions
-
-### Using Grafana Dashboards
-
-1. **Start Grafana** (if not already running):
-   ```bash
-   docker run -d -p 3000:3000 grafana/grafana
-   ```
-
-2. **Configure Prometheus Datasource**:
-   - Open Grafana at http://localhost:3000
-   - Go to Configuration → Data Sources
-   - Add Prometheus datasource (default: `http://localhost:9090`)
-
-3. **Import Dashboard**:
-   - Go to Dashboards → Import
-   - Upload `grafana_dashboard.json`
-   - Select the Prometheus datasource
-   - View your pipeline metrics!
-
-### Fallback Visualization
-
-If Grafana is not available, the pipeline falls back to:
-- **Plotly** (for interactive web-based dashboards) - Primary backup
-- **Basic text summary** (if Plotly is also unavailable)
-
-To use a different visualization backend, set `dashboard_mode` when creating the pipeline:
-```python
-pipeline = Pipeline(..., dashboard_mode="plotly")  # Use Plotly interactive dashboard
-pipeline = Pipeline(..., dashboard_mode="grafana")  # Use Grafana (default)
-```
-
-**Plotly Features:**
-- Interactive HTML dashboards that can be opened in any web browser
-- Zoom, pan, and hover interactions
-- Professional-looking charts and graphs
-- No server required - works offline
+See `INDEX.md` for a complete quick reference guide.

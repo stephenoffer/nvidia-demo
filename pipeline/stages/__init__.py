@@ -5,35 +5,83 @@ This module provides a comprehensive set of processing stages organized by categ
 - Processors: Data transformation stages
 - Analyzers: Data analysis stages
 - Filters: Data filtering stages
+- Inference: Model inference stages
 """
 
-# Validators
-from pipeline.stages.completeness_validator import CompletenessValidator
-from pipeline.stages.cross_modal_validator import CrossModalValidator
-from pipeline.stages.physics_validator import PhysicsValidator
+# Import from organized subdirectories
+from pipeline.stages.validators import (
+    CompletenessValidator,
+    CrossModalValidator,
+    PhysicsValidator,
+    SchemaValidator,
+)
 
-# Processors
-from pipeline.stages.episode_detector import EpisodeBoundaryDetector
-from pipeline.stages.instruction_grounding import InstructionGroundingStage
-from pipeline.stages.sequence_normalizer import SequenceNormalizer
-from pipeline.stages.sensor import SensorProcessor
-from pipeline.stages.temporal_alignment import TemporalAlignmentStage
-from pipeline.stages.temporal_resampler import TemporalResampler
-from pipeline.stages.text import TextProcessor
-from pipeline.stages.transition_alignment import TransitionAlignmentStage
-from pipeline.stages.video import VideoProcessor
+from pipeline.stages.processors import (
+    DataAggregator,
+    DataTransformer,
+    EpisodeBoundaryDetector,
+    FeatureEngineeringStage,
+    InstructionGroundingStage,
+    ModalityDropoutStage,
+    SensorProcessor,
+    SequenceNormalizer,
+    TemporalAlignmentStage,
+    TemporalResampler,
+    TextProcessor,
+    TransitionAlignmentStage,
+    VideoProcessor,
+)
 
-# Analyzers
-from pipeline.stages.anomaly_detector import AnomalyDetector
-from pipeline.stages.data_sharding import DataShardingStage
-from pipeline.stages.distribution_analyzer import DistributionAnalyzer
-from pipeline.stages.gpu_analytics import GPUAnalyticsStage
-from pipeline.stages.multimodal_features import MultimodalFeatureExtractor
-from pipeline.stages.quality_scorer import DataQualityScorer
+from pipeline.stages.analyzers import (
+    AnomalyDetector,
+    DataProfiler,
+    DataShardingStage,
+    DistributionAnalyzer,
+    DriftDetector,
+    GPUAnalyticsStage,
+    MultimodalFeatureExtractor,
+    DataQualityScorer,
+)
 
-# Filters
 from pipeline.stages.filters import QualityFilter
-from pipeline.stages.modality_dropout import ModalityDropoutStage
+
+from pipeline.stages.inference import BatchInferenceStage
+
+# Re-export all for backward compatibility
+__all__ = [
+    # Validators
+    "CompletenessValidator",
+    "CrossModalValidator",
+    "PhysicsValidator",
+    "SchemaValidator",
+    # Processors
+    "DataAggregator",
+    "DataTransformer",
+    "EpisodeBoundaryDetector",
+    "FeatureEngineeringStage",
+    "InstructionGroundingStage",
+    "ModalityDropoutStage",
+    "SensorProcessor",
+    "SequenceNormalizer",
+    "TemporalAlignmentStage",
+    "TemporalResampler",
+    "TextProcessor",
+    "TransitionAlignmentStage",
+    "VideoProcessor",
+    # Analyzers
+    "AnomalyDetector",
+    "DataProfiler",
+    "DataShardingStage",
+    "DistributionAnalyzer",
+    "DriftDetector",
+    "GPUAnalyticsStage",
+    "MultimodalFeatureExtractor",
+    "DataQualityScorer",
+    # Filters
+    "QualityFilter",
+    # Inference
+    "BatchInferenceStage",
+]
 
 # Base classes
 from pipeline.stages.base import PipelineStage, ProcessorBase, ValidatorBase
@@ -57,6 +105,9 @@ __all__ = [
     "TextProcessor",
     "TransitionAlignmentStage",
     "VideoProcessor",
+    "FeatureEngineeringStage",
+    "DataTransformer",
+    "DataAggregator",
     # Analyzers
     "AnomalyDetector",
     "DataShardingStage",
@@ -64,6 +115,10 @@ __all__ = [
     "GPUAnalyticsStage",
     "MultimodalFeatureExtractor",
     "DataQualityScorer",
+    "DataProfiler",
+    "DriftDetector",
+    "SchemaValidator",
+    "BatchInferenceStage",
     # Filters
     "QualityFilter",
     "ModalityDropoutStage",

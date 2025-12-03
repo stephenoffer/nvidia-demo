@@ -345,7 +345,7 @@ class LSHDeduplicator:
             # Use Ray's built-in actor cleanup
             for actor in workers:
                 try:
-                    ray.kill(actor)
+                    ray.kill(actor, no_restart=True)
                 except (ValueError, ray.exceptions.RayActorError):
                     pass
             raise TimeoutError("Timeout computing minhashes") from None
@@ -409,7 +409,7 @@ class LSHDeduplicator:
             # Cleanup workers properly - use Ray's built-in cleanup
             for actor in workers:
                 try:
-                    ray.kill(actor)
+                    ray.kill(actor, no_restart=True)
                 except (ValueError, ray.exceptions.RayActorError):
                     pass
 

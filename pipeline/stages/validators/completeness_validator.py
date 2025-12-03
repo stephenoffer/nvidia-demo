@@ -69,7 +69,7 @@ class CompletenessValidator(ValidatorBase):
         Returns:
             Validation result dictionary
         """
-        from pipeline.utils.data_types import get_data_type
+        from pipeline.utils.data.data_types import get_data_type
 
         data_type = get_data_type(item).value
         required_fields = self.required_fields_by_type.get(data_type, [])

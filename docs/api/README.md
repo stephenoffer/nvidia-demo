@@ -29,6 +29,133 @@ results = pipeline.run()
 - `get_metrics()`: Get current pipeline metrics
 - `shutdown()`: Shutdown pipeline and cleanup resources
 
+#### Pythonic Features
+
+The `Pipeline` class supports standard Python built-ins and operators:
+
+```python
+from pipeline.api import Pipeline
+
+pipeline1 = Pipeline.quick_start(input_paths="s3://bucket/data1/", output_path="s3://output/")
+pipeline2 = Pipeline.quick_start(input_paths="s3://bucket/data2/", output_path="s3://output/")
+
+# Standard Python built-ins
+print(f"Number of sources: {len(pipeline1)}")  # len() support
+for source in pipeline1:  # Iteration
+    print(source)
+if pipeline1:  # Boolean check
+    print("Pipeline is configured")
+if "s3://bucket/data1/" in pipeline1:  # Membership check
+    print("Source found")
+
+# Operator overloading
+combined = pipeline1 + pipeline2  # Combine sources
+```
+
+## DataFrame API
+
+### PipelineDataFrame
+
+A Pythonic DataFrame API inspired by Spark, Polars, and Pandas, with full support for standard Python built-ins and operators.
+
+#### Basic Usage
+
+```python
+from pipeline.api import PipelineDataFrame
+
+# Create DataFrame from paths
+df = PipelineDataFrame.from_paths(["s3://bucket/data/"])
+
+# Standard Python built-ins
+print(f"Rows: {len(df)}")  # Number of rows
+print(f"Shape: {df.shape}")  # (rows, columns) tuple
+print(f"Columns: {df.columns}")  # List of column names
+print(f"Empty: {df.empty}")  # Boolean check
+
+# Pythonic indexing and slicing
+column = df["episode_id"]  # Column access
+first_row = df[0]  # Row indexing
+first_10 = df[0:10]  # Slicing (like Pandas)
+selected = df[["col1", "col2"]]  # Multiple columns
+value = df.episode_id  # Attribute-style access
+
+# Operator overloading
+df1 = PipelineDataFrame.from_paths(["s3://bucket/data1/"])
+df2 = PipelineDataFrame.from_paths(["s3://bucket/data2/"])
+combined = df1 + df2  # Concatenate (like pd.concat)
+union = df1 | df2  # Alternative union syntax
+
+# Iteration and membership
+for row in df:  # Iterate rows
+    process_row(row)
+if {"episode_id": "123"} in df:  # Check membership
+    print("Row found")
+
+# Copy
+df_copy = df.copy()  # Create copy
+```
+
+#### Transformations
+
+```python
+# Lazy transformations with method chaining
+result = (
+    df
+    .filter(lambda x: x["quality"] > 0.8)
+    .map(lambda x: {**x, "processed": True})
+    .groupby("episode_id")
+    .agg({"sensor_data": "mean", "timestamp": "max"})
+    .join(other_df, on="episode_id")
+    .sort("timestamp")
+    .limit(1000)
+    .cache()  # Cache intermediate result
+    .collect()  # Trigger execution
+)
+```
+
+#### GPU Acceleration
+
+```python
+# GPU-accelerated batch processing
+processed = df.map_batches(
+    lambda batch: transform_batch(batch),
+    batch_size=1000,
+    use_gpu=True,
+    num_gpus=4,
+)
+```
+
+#### Pythonic Features Summary
+
+**Built-ins:**
+- `len(df)` - Get number of rows (Python convention)
+- `iter(df)` / `for row in df` - Iterate over rows
+- `bool(df)` / `if df` - Check if non-empty
+- `value in df` - Check membership
+- `str(df)` - String representation
+
+**Operators:**
+- `df1 + df2` - Concatenate DataFrames (like `pd.concat()`)
+- `df1 | df2` - Union DataFrames (alternative syntax)
+- `df == other` - Check if same dataset object
+- `df != other` - Check if different dataset objects
+
+**Indexing:**
+- `df["column"]` - Column access (returns list of values)
+- `df.column` - Attribute-style column access (like Pandas)
+- `df[0]` - Row indexing (returns row dict)
+- `df[0:10]` - Row slicing (returns new DataFrame)
+- `df[["col1", "col2"]]` - Multiple column selection (returns DataFrame)
+
+**Properties:**
+- `df.shape` - Get (rows, columns) tuple
+- `df.columns` - Get list of column names
+- `df.empty` - Check if empty
+- `df.dataset` - Access underlying Ray Dataset
+
+**Methods:**
+- `df.copy()` - Create a copy (shallow copy, lazy evaluation)
+
 ## GPU Utilities
 
 ### GPU ETL Operations

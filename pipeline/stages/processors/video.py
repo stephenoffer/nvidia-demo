@@ -22,7 +22,7 @@ from pipeline.utils.constants import (
     _NORMALIZATION_DIVISOR,
     _DEFAULT_CPUS_PER_GPU,
 )
-from pipeline.utils.data_types import get_data_type, DataType
+from pipeline.utils.data.data_types import get_data_type, DataType
 
 logger = logging.getLogger(__name__)
 

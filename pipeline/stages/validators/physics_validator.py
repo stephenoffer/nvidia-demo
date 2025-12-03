@@ -79,7 +79,7 @@ class PhysicsValidator(ValidatorBase):
         violations: list[str] = []
         warnings: list[str] = []
 
-        from pipeline.utils.data_types import get_data_type, DataType
+        from pipeline.utils.data.data_types import get_data_type, DataType
 
         if get_data_type(item) != DataType.SENSOR:
             return {

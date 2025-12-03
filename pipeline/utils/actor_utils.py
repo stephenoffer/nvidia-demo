@@ -21,6 +21,9 @@ def with_actor_cleanup(
     actor_kwargs: dict[str, Any] | None = None,
 ) -> Callable[[Callable[[Any, list[dict[str, Any]]], list[dict[str, Any]]]], Callable[[list[dict[str, Any]]], list[dict[str, Any]]]]:
     """Create a batch processor with automatic actor cleanup.
+    
+    WARNING: This creates and destroys an actor for EVERY batch, which is very inefficient.
+    For production use, prefer create_actor_pool() to reuse actors across batches.
 
     Args:
         actor_class: Ray actor class to create
@@ -45,7 +48,7 @@ def with_actor_cleanup(
                 return process_func(actor, batch)
             finally:
                 try:
-                    ray.kill(actor)
+                    ray.kill(actor, no_restart=True)
                 except (ValueError, ray.exceptions.RayActorError):
                     pass
 

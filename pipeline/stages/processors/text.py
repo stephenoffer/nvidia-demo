@@ -12,7 +12,7 @@ from ray.data import Dataset
 
 from pipeline.stages.base import ProcessorBase
 from pipeline.utils.constants import _DEFAULT_BATCH_SIZE, _DEFAULT_CPUS, _DEFAULT_MIN_LENGTH, _DEFAULT_MAX_LENGTH
-from pipeline.utils.data_types import get_data_type, DataType, extract_text
+from pipeline.utils.data.data_types import get_data_type, DataType, extract_text
 
 logger = logging.getLogger(__name__)
 

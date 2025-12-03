@@ -130,7 +130,7 @@ class MultimodalLoader:
 
             # Validate path (but don't sanitize S3/cloud paths as they're not local file paths)
             try:
-                from pipeline.utils.input_validation import InputValidator
+                from pipeline.utils.validation.input_validation import InputValidator
 
                 validator = InputValidator(strict=True)
                 is_valid, error_msg = validator.validate_path(path)
@@ -167,7 +167,7 @@ class MultimodalLoader:
             try:
                 # Retry cloud storage operations
                 if path.startswith(("s3://", "gs://", "hdfs://", "abfss://")):
-                    from pipeline.utils.retry import retry_with_exponential_backoff
+                    from pipeline.utils.execution.retry import retry_with_exponential_backoff
 
                     dataset = retry_with_exponential_backoff(
                         lambda: handler(path),
@@ -185,7 +185,7 @@ class MultimodalLoader:
         # Detect corruption in loaded datasets
         # Use streaming-friendly corruption detection
         try:
-            from pipeline.utils.corruption_detection import detect_corruption_batch
+            from pipeline.utils.validation.corruption_detection import detect_corruption_batch
 
             # Add corruption detection as a stage with proper batch format
             for i, dataset in enumerate(datasets):

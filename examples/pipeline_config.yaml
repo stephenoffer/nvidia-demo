@@ -2,24 +2,21 @@
 # Supports declarative configuration of data sources, processing, and output
 
 sources:
-  # Example: Local mock data (recommended for testing)
-  - type: parquet
-    path: examples/data/parquet/mock_data.parquet
-
-  # Example: Public S3 video data (no credentials needed)
+  # Example: Public S3 video data (no credentials needed - always available)
   - type: video
     path: s3://anonymous@ray-example-data/basketball.mp4
     extract_frames: true
     frame_rate: 30
     max_frames: 100
 
-  # Example: NumPy arrays (local mock data)
-  - type: numpy
-    path: examples/data/numpy/
-
-  # Example: Text data (local mock data)
-  - type: text
-    path: examples/data/mock_text.txt
+  # Example: Local mock data (if available - auto-detected)
+  # Uncomment if you have local test data:
+  # - type: parquet
+  #   path: examples/data/parquet/mock_data.parquet
+  # - type: numpy
+  #   path: examples/data/numpy/
+  # - type: text
+  #   path: examples/data/mock_text.txt
 
   # Example: S3 data sources (commented out - requires credentials or data availability)
   # Uncomment and configure if you have access to these S3 buckets:

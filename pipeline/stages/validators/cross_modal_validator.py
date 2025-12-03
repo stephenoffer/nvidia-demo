@@ -15,7 +15,7 @@ from ray.data import Dataset
 
 from pipeline.stages.base import ValidatorBase
 from pipeline.utils.constants import _DEFAULT_BATCH_SIZE
-from pipeline.utils.data_types import detect_modalities, Modality
+from pipeline.utils.data.data_types import detect_modalities, Modality
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ class CrossModalValidator(ValidatorBase):
         """
         violations = []
 
-        from pipeline.utils.data_types import extract_text, extract_sensor_data
+        from pipeline.utils.data.data_types import extract_text, extract_sensor_data
 
         if self.required_modalities:
             missing = set(self.required_modalities) - set(modalities)

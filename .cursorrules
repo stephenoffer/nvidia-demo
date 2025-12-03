@@ -1,0 +1,21 @@
+---
+description: User preferences for code generation and documentation
+alwaysApply: true
+---
+
+# User Rules
+
+## Documentation and Reports
+
+- **NEVER create markdown documentation files** (`.md` files) unless explicitly requested by the user
+- Do not create summary reports, refactoring guides, API documentation, or any other markdown files automatically
+- Only create documentation when the user explicitly asks for it
+- Focus on code changes and implementation, not documentation generation
+
+## Code Organization
+
+- Prefer clean, well-organized code structure
+- Use proper subdirectories and logical grouping
+- Keep files focused and maintainable
+- Use internal/external API distinctions (underscore prefix for internal)
+

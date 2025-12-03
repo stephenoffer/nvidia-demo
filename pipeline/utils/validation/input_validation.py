@@ -162,11 +162,16 @@ class InputValidator:
                 if not is_valid:
                     errors.append(f"output_path: {error_msg}")
 
-        # Validate numeric fields
+        # Validate numeric fields (allow None for optional fields)
         numeric_fields = ["num_gpus", "num_cpus", "batch_size", "checkpoint_interval"]
+        optional_numeric_fields = ["num_cpus", "batch_size"]  # These can be None
+        
         for field in numeric_fields:
             if field in config:
                 value = config[field]
+                # Allow None for optional fields
+                if value is None and field in optional_numeric_fields:
+                    continue
                 if not isinstance(value, (int, float)):
                     errors.append(f"{field} must be numeric")
                 elif value < 0:

@@ -1,0 +1,34 @@
+# Multiple Data Sources - Intermediate Level
+#
+# Demonstrates:
+# - Multiple data source types
+# - Real data sources (public S3 video + local test data)
+# - GPU acceleration
+# - Streaming execution
+
+sources:
+  # Public S3 video (no credentials needed)
+  - type: video
+    path: "s3://anonymous@ray-example-data/basketball.mp4"
+    extract_frames: true
+    frame_rate: 30
+    max_frames: 100
+  
+  # Local test data (if available)
+  # Uncomment if you have local test data:
+  # - type: parquet
+  #   path: "../data/parquet/mock_data.parquet"
+  # - type: groot
+  #   path: "../data/"
+
+# Output configuration
+output: "./output/curated"
+
+# Compute configuration
+enable_gpu: false  # Set to true if GPU available
+num_cpus: 4
+batch_size: 128
+
+# Execution configuration
+streaming: true
+

@@ -30,12 +30,20 @@ class MultiPipelineRunner:
         self.combine_config = combine_config or CombineConfig()
 
     def run(self) -> dict[str, Any]:
-        """Run pipelines concurrently and optionally combine their outputs."""
-        if not ray.is_initialized():
-            # Use centralized Ray initialization
-            from pipeline.utils.ray.init import initialize_ray
+        """Run pipelines concurrently and optionally combine their outputs.
+        
+        Returns:
+            Dictionary with pipeline results and optional combined output
             
-            init_result = initialize_ray(
+        Raises:
+            RuntimeError: If Ray initialization fails or pipeline execution fails
+            ValueError: If no valid pipeline results are produced
+        """
+        if not ray.is_initialized():
+            # Use centralized Ray initialization via RayContext
+            from pipeline.utils.ray.context import RayContext
+            
+            init_result = RayContext.initialize(
                 address=None,  # Auto-detect from RAY_ADDRESS
                 ignore_reinit_error=True,
                 configure_logging=True,
@@ -93,14 +101,22 @@ class MultiPipelineRunner:
             except Exception as e:
                 logger.error(f"Error getting remaining pipeline results: {e}", exc_info=True)
 
+        if not pipeline_results:
+            raise ValueError("No pipeline results produced - all pipelines may have failed")
+
         response: dict[str, Any] = {"pipelines": pipeline_results}
 
         mode = self.combine_config.mode
         if mode == CombineMode.INDEPENDENT:
             return response
 
-        combine_meta = self._combine_pipeline_outputs(pipeline_results)
-        response["combine"] = combine_meta
+        try:
+            combine_meta = self._combine_pipeline_outputs(pipeline_results)
+            response["combine"] = combine_meta
+        except Exception as e:
+            logger.error(f"Failed to combine pipeline outputs: {e}", exc_info=True)
+            response["combine_error"] = str(e)
+        
         return response
 
     def _combine_pipeline_outputs(
@@ -127,10 +143,10 @@ class MultiPipelineRunner:
                     )
                     continue
                 dataset_map[result["name"]] = ray.data.read_parquet(output_path)
-            except (OSError, IOError, ValueError) as e:
+            except (OSError, IOError, ValueError, ray.exceptions.RayTaskError) as e:
                 logger.warning(
                     "Failed to read output from pipeline %s at %s: %s",
-                    result["name"],
+                    result.get("name", "unknown"),
                     output_path,
                     e,
                 )
@@ -198,18 +214,42 @@ class MultiPipelineRunner:
 
 @ray.remote(max_retries=2, num_cpus=1)  # Default resources, can be overridden
 def _execute_pipeline_spec(spec: dict[str, Any]) -> dict[str, Any]:
-    """Ray task that executes a declarative pipeline spec."""
+    """Ray task that executes a declarative pipeline spec.
+    
+    Args:
+        spec: Pipeline specification dictionary with 'pipeline_args' and 'name'
+        
+    Returns:
+        Dictionary with pipeline name, results, and output path
+        
+    Raises:
+        RuntimeError: If pipeline execution fails
+    """
     from pipeline.api.declarative import Pipeline  # Local import to avoid cycle
 
-    pipeline_args = spec["pipeline_args"]
-    pipeline_name = spec["name"]
+    pipeline_args = spec.get("pipeline_args", {})
+    pipeline_name = spec.get("name", "unknown")
+    
+    if not pipeline_args:
+        raise ValueError(f"Pipeline {pipeline_name} missing pipeline_args")
 
-    pipeline = Pipeline(**pipeline_args)
-    results = pipeline.run()
-    results["pipeline_name"] = pipeline_name
-    return {
-        "name": pipeline_name,
-        "results": results,
-        "output_path": results.get("output_path"),
-    }
+    try:
+        pipeline = Pipeline(**pipeline_args)
+        results = pipeline.run()
+        results["pipeline_name"] = pipeline_name
+        return {
+            "name": pipeline_name,
+            "results": results,
+            "output_path": results.get("output_path"),
+        }
+    except Exception as e:
+        logger.error(f"Pipeline {pipeline_name} failed: {e}", exc_info=True)
+        raise RuntimeError(f"Pipeline {pipeline_name} execution failed: {e}") from e
+    finally:
+        # Ensure cleanup happens even if errors occur
+        try:
+            if 'pipeline' in locals():
+                pipeline.shutdown()
+        except Exception:
+            pass
 

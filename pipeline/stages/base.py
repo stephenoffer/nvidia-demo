@@ -95,15 +95,25 @@ class ValidatorBase(PipelineStage):
         self,
         reject_invalid: bool = False,
         batch_size: int = _DEFAULT_BATCH_SIZE,
+        # Ray Data options
+        ray_remote_args: Optional[dict[str, Any]] = None,
+        batch_format: Optional[str] = None,
+        **map_batches_kwargs: Any,
     ):
         """Initialize validator.
 
         Args:
             reject_invalid: Whether to reject invalid items
             batch_size: Batch size for processing
+            ray_remote_args: Additional Ray remote arguments
+            batch_format: Batch format for map_batches
+            **map_batches_kwargs: Additional kwargs passed to map_batches
         """
         super().__init__(batch_size=batch_size)
         self.reject_invalid = reject_invalid
+        self.ray_remote_args = ray_remote_args or {}
+        self.batch_format = batch_format
+        self.map_batches_kwargs = map_batches_kwargs
 
     @abstractmethod
     def _validate_item(self, item: dict[str, Any]) -> dict[str, Any]:
@@ -143,11 +153,18 @@ class ValidatorBase(PipelineStage):
                         validated.append(item)
             return validated
 
-        return dataset.map_batches(
-            validate_batch, 
-            batch_size=self.batch_size,
-            batch_format="pandas"  # Specify batch format for better performance
-        )
+        map_kwargs = {
+            "batch_size": self.batch_size,
+            **self.map_batches_kwargs,
+        }
+        if self.batch_format:
+            map_kwargs["batch_format"] = self.batch_format
+        elif "batch_format" not in map_kwargs:
+            map_kwargs["batch_format"] = "pandas"
+        if self.ray_remote_args:
+            map_kwargs["ray_remote_args"] = self.ray_remote_args
+
+        return dataset.map_batches(validate_batch, **map_kwargs)
 
 
 class ProcessorBase(PipelineStage):

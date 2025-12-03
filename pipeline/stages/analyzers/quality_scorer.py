@@ -132,7 +132,7 @@ class DataQualityScorer(ProcessorBase):
         Returns:
             Quality score (0.0-1.0)
         """
-        from pipeline.utils.data_types import get_data_type, DataType
+        from pipeline.utils.data.data_types import get_data_type, DataType
 
         if get_data_type(item) != DataType.VIDEO:
             return 1.0
@@ -168,7 +168,7 @@ class DataQualityScorer(ProcessorBase):
         Returns:
             Quality score (0.0-1.0)
         """
-        from pipeline.utils.data_types import get_data_type, DataType
+        from pipeline.utils.data.data_types import get_data_type, DataType
 
         if get_data_type(item) != DataType.SENSOR:
             return 1.0
@@ -207,7 +207,7 @@ class DataQualityScorer(ProcessorBase):
         Returns:
             Quality score (0.0-1.0)
         """
-        from pipeline.utils.data_types import get_data_type, DataType, extract_text
+        from pipeline.utils.data.data_types import get_data_type, DataType, extract_text
 
         if get_data_type(item) != DataType.TEXT:
             return 1.0
@@ -255,7 +255,7 @@ class DataQualityScorer(ProcessorBase):
         if "temporal_consistency_warning" in item:
             score *= 0.7  # Temporal consistency warning
 
-        from pipeline.utils.data_types import get_data_type, DataType
+        from pipeline.utils.data.data_types import get_data_type, DataType
 
         data_type = get_data_type(item)
         has_video = data_type == DataType.VIDEO

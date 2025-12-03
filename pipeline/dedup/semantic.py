@@ -532,7 +532,7 @@ class SemanticDeduplicator:
             from pipeline.utils.gpu.memory import clear_gpu_cache
 
             try:
-                ray.kill(worker)
+                ray.kill(worker, no_restart=True)
             except (ValueError, ray.exceptions.RayActorError):
                 pass
             clear_gpu_cache()

@@ -11,7 +11,7 @@ from ray.data import Dataset
 
 from pipeline.stages.base import ProcessorBase
 from pipeline.utils.constants import _DEFAULT_BATCH_SIZE, _DEFAULT_SAMPLE_RATE, _DEFAULT_CPUS
-from pipeline.utils.data_types import get_data_type, DataType, extract_sensor_data
+from pipeline.utils.data.data_types import get_data_type, DataType, extract_sensor_data
 
 logger = logging.getLogger(__name__)
 

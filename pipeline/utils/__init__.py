@@ -33,8 +33,26 @@ from pipeline.utils.resource_manager import (
     get_resource_manager,
     validate_path,
 )
-from pipeline.utils.retry import RetryConfig, retry_with_backoff
-from pipeline.utils.timeout import with_timeout
+from pipeline.utils.context import PipelineContext, get_context
+from pipeline.utils.data.reader_registry import (
+    ReaderRegistry,
+    detect_reader,
+    get_reader,
+    list_formats,
+)
+from pipeline.utils.data.writer_registry import (
+    WriterRegistry,
+    detect_writer,
+    get_writer as get_writer_func,
+    list_formats as list_write_formats,
+)
+from pipeline.utils.execution import (
+    RetryConfig,
+    retry_with_backoff,
+    retry_cloud_storage,
+    retry_with_exponential_backoff,
+    with_timeout,
+)
 
 # Note: Caching utilities removed - use functools.lru_cache or cachetools directly
 # Note: Circuit breaker removed - use pybreaker library if needed
@@ -74,5 +92,18 @@ __all__ = [
     "RetryConfig",
     "retry_with_backoff",
     "with_timeout",
+    # Context management
+    "PipelineContext",
+    "get_context",
+    # Reader registry
+    "ReaderRegistry",
+    "detect_reader",
+    "get_reader",
+    "list_formats",
+    # Writer registry
+    "WriterRegistry",
+    "detect_writer",
+    "get_writer_func",
+    "list_write_formats",
 ]
 

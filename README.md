@@ -57,6 +57,80 @@ pip install -e .
 
 #### Python API
 
+**Declarative API (Recommended):**
+
+```python
+from pipeline.api import Pipeline
+
+# Quick start - simplest way to create a pipeline
+pipeline = Pipeline.quick_start(
+    input_paths="s3://bucket/data/",
+    output_path="s3://bucket/output/",
+    enable_gpu=True
+)
+
+# Run pipeline
+results = pipeline.run()
+print(f"Processed {results['total_items']} items")
+```
+
+**Fluent Builder API:**
+
+```python
+from pipeline.api import PipelineBuilder
+
+# Method chaining for intuitive pipeline construction
+pipeline = (
+    PipelineBuilder()
+    .add_source("s3://bucket/videos/*.mp4")
+    .add_source("s3://bucket/text/*.jsonl")
+    .enable_gpu(num_gpus=4)
+    .set_batch_size(32)
+    .add_profiler(columns=["image", "text"])
+    .add_validator(schema={"image": list, "text": str})
+    .set_output("s3://bucket/output/")
+    .build()
+)
+
+results = pipeline.run()
+```
+
+**DataFrame API (Pythonic):**
+
+```python
+from pipeline.api import PipelineDataFrame
+
+# Create DataFrame from paths
+df = PipelineDataFrame.from_paths(["s3://bucket/data/"])
+
+# Use standard Python built-ins
+print(f"Rows: {len(df)}")  # len() support
+print(f"Shape: {df.shape}")  # (rows, columns)
+print(f"Columns: {df.columns}")  # Column names
+
+# Pythonic indexing and slicing
+first_10 = df[0:10]  # Slicing (like Pandas)
+column = df["episode_id"]  # Column access
+value = df.episode_id  # Attribute-style access
+
+# Operator overloading
+df1 = PipelineDataFrame.from_paths(["s3://bucket/data1/"])
+df2 = PipelineDataFrame.from_paths(["s3://bucket/data2/"])
+combined = df1 + df2  # Concatenate (like pd.concat)
+
+# Lazy transformations with method chaining
+result = (
+    df
+    .filter(lambda x: x["quality"] > 0.8)
+    .map(lambda x: {**x, "processed": True})
+    .groupby("episode_id")
+    .agg({"sensor_data": "mean"})
+    .collect()  # Trigger execution
+)
+```
+
+**Legacy API (Still Supported):**
+
 ```python
 from pipeline import MultimodalPipeline, PipelineConfig
 
@@ -182,6 +256,46 @@ pipeline.add_stage(TextProcessor(
 # Process with streaming execution
 result = pipeline.run()
 ```
+## New Features
+
+### DataFrame-Like API (Inspired by Spark, Polars, Pandas)
+
+- **PipelineDataFrame**: Fluent DataFrame API with lazy evaluation
+- **Method Chaining**: Intuitive method chaining for pipeline construction
+- **GPU Acceleration**: Seamless GPU acceleration for batch operations
+- **Lazy Evaluation**: Transformations are lazy until actions are called
+- **Comprehensive Operations**: Filter, map, groupby, join, sort, sample, and more
+
+### Batch Inference with MLOps Integration
+
+- **Batch Inference**: Distributed batch inference using Ray Data with GPU acceleration
+- **Model Registry**: Integration with MLflow Model Registry for model versioning
+- **Prediction Logging**: Automatic logging of predictions to MLflow/W&B for monitoring
+- **Model Staging**: Support for model stages (Staging, Production, Archived)
+- **TensorRT Support**: Optional NVIDIA TensorRT optimization for inference
+- **DALI Integration**: Optional NVIDIA DALI for GPU-accelerated data loading
+
+### Enhanced Data Quality Checks
+
+- **Schema Validation**: Validate data schemas and detect schema drift
+- **Data Profiling**: Comprehensive data profiling with statistics and outlier detection (GPU-accelerated with cuDF)
+- **Drift Detection**: Detect data drift using KS test, PSI, or chi-square methods
+- **Missing Value Detection**: Identify and report missing values
+
+### Feature Engineering and ETL
+
+- **Feature Engineering**: Extract and transform features from raw data
+- **Data Transformation**: Flexible data transformation with filtering
+- **Data Aggregation**: Groupby and aggregation operations (GPU-accelerated)
+- **Feature Store Integration**: Integration with Feast and other feature stores
+
+### Experiment Tracking
+
+- **MLflow Integration**: Full MLflow experiment tracking support
+- **Weights & Biases Integration**: Full W&B experiment tracking support
+- **Dual Tracking**: Support for both MLflow and W&B simultaneously
+- **Automatic Logging**: Automatic parameter and metric logging
+
 ## Datasource Integrations
 
 The pipeline supports a wide range of datasources for robotics and multimodal data:
@@ -439,6 +553,116 @@ train_loader = training_integration.create_dataloader(
 ```
 
 See [`examples/groot_model_training.py`](examples/groot_model_training.py) for complete training example.
+
+### DataFrame-Like API (Inspired by Spark, Polars, Pandas)
+
+The `PipelineDataFrame` API provides a Pythonic, intuitive interface that supports standard Python built-ins and operators, making it familiar to users of Pandas, Spark, and Polars.
+
+```python
+from pipeline.api import PipelineDataFrame
+
+# Create DataFrame from paths
+df = PipelineDataFrame.from_paths(["s3://bucket/data/"])
+
+# Standard Python built-ins
+print(f"Number of rows: {len(df)}")  # len() support
+print(f"Shape: {df.shape}")  # (rows, columns) tuple
+print(f"Columns: {df.columns}")  # List of column names
+print(f"Empty: {df.empty}")  # Boolean check
+
+# Pythonic indexing and slicing (like Pandas)
+column = df["episode_id"]  # Column access
+first_row = df[0]  # Row indexing
+first_10 = df[0:10]  # Slicing
+selected = df[["col1", "col2"]]  # Multiple columns
+value = df.episode_id  # Attribute-style access
+
+# Operator overloading
+df1 = PipelineDataFrame.from_paths(["s3://bucket/data1/"])
+df2 = PipelineDataFrame.from_paths(["s3://bucket/data2/"])
+combined = df1 + df2  # Concatenate (like pd.concat)
+union = df1 | df2  # Alternative union syntax
+
+# Lazy transformations with method chaining
+result = (
+    df
+    .filter(lambda x: x["quality"] > 0.8)
+    .map(lambda x: {**x, "processed": True})
+    .groupby("episode_id")
+    .agg({"sensor_data": "mean", "timestamp": "max"})
+    .join(other_df, on="episode_id")
+    .cache()  # Cache intermediate result
+    .collect()  # Trigger execution
+)
+
+# GPU-accelerated batch processing
+processed = df.map_batches(
+    lambda batch: transform_batch(batch),
+    batch_size=1000,
+    use_gpu=True,
+)
+
+# Copy and iteration
+df_copy = df.copy()  # Create copy
+for row in df:  # Iterate rows
+    process_row(row)
+```
+
+**Pythonic Features:**
+- `len(df)` - Get number of rows (Python convention)
+- `df1 + df2` - Concatenate DataFrames (like `pd.concat()`)
+- `df[0:10]` - Row slicing (like Pandas)
+- `df.column` - Attribute-style column access
+- `df.shape`, `df.columns`, `df.empty` - Pandas-like properties
+- `df.copy()` - Create a copy
+- `for row in df` - Iterate over rows
+- `value in df` - Check membership
+
+See [`examples/dataframe_api_example.py`](examples/dataframe_api_example.py) for complete examples.
+
+### Batch Inference with MLOps Integration
+
+```python
+from pipeline import MultimodalPipeline, PipelineConfig
+from pipeline.stages import (
+    BatchInferenceStage,
+    SchemaValidator,
+    DataProfiler,
+    DriftDetector,
+)
+from pipeline.integrations import create_model_registry
+
+# Create pipeline with MLOps integration
+config = PipelineConfig(
+    input_paths=["s3://bucket/inference_data/"],
+    output_path="s3://bucket/predictions/",
+    num_gpus=4,
+)
+
+pipeline = MultimodalPipeline(config)
+
+# Add data quality checks
+pipeline.add_stage(SchemaValidator(expected_schema={"image": list, "text": str}))
+pipeline.add_stage(DataProfiler(profile_columns=["image", "sensor_data"], use_gpu=True))
+pipeline.add_stage(DriftDetector(drift_threshold=0.1))
+
+# Add batch inference with TensorRT
+model_registry = create_model_registry(registry_type="mlflow")
+model_uri = model_registry.get_model(model_name="groot-model", stage="Production")
+
+pipeline.add_stage(BatchInferenceStage(
+    model_uri=model_uri,
+    input_column="image",
+    output_column="predictions",
+    use_gpu=True,
+    use_tensorrt=True,
+    use_dali=True,
+))
+
+results = pipeline.run()
+```
+
+See [`examples/mlops_batch_inference.py`](examples/mlops_batch_inference.py) for complete example.
 
 ## Project Structure
 

@@ -154,7 +154,7 @@ class PipelineExecutor:
         """
         if self.config.checkpoint_interval > 0:
             try:
-                from pipeline.utils.checkpoint import create_checkpoint_manager
+                from pipeline.utils.execution.checkpoint import create_checkpoint_manager
 
                 checkpoint_dir = str(Path(self.config.output_path).parent / "checkpoints")
                 checkpoint_manager = create_checkpoint_manager(

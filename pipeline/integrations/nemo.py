@@ -4,6 +4,13 @@ NVIDIA NeMo is a framework for building, training, and fine-tuning large
 language models and multimodal foundation models. This integration provides
 high-quality text embeddings for semantic deduplication and data curation.
 
+CRITICAL IMPROVEMENTS:
+- Uses actual NeMo TextEmbeddingModel API when available
+- Proper GPU memory management for NeMo models
+- Batch processing with CUDA optimization
+- GPU object store support for Ray Data
+- Proper model loading and caching
+
 See: https://docs.nvidia.com/nemo-framework/user-guide/latest/
 """
 
@@ -11,13 +18,15 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from contextlib import nullcontext as _null_context
 
 import torch  # https://pytorch.org/
 
 from pipeline.exceptions import DataSourceError
 from pipeline.utils.decorators import handle_errors, log_execution_time
 from pipeline.utils.constants import _SYNTHETIC_BATCH_SIZE
+from pipeline.utils.gpu.memory import get_cuda_device, gpu_memory_cleanup, check_gpu_memory
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +34,15 @@ logger = logging.getLogger(__name__)
 _DEFAULT_EMBEDDING_DIM = 384
 _DEFAULT_MIN_TEXT_LENGTH = 10
 _DEFAULT_MIN_WORDS = 5
+
+# Check for NeMo availability
+_NEMO_AVAILABLE = False
+try:
+    from nemo.collections.nlp.models import TextEmbeddingModel  # type: ignore[attr-defined]
+    _NEMO_AVAILABLE = True
+except ImportError:
+    _NEMO_AVAILABLE = False
+    logger.debug("NVIDIA NeMo not available, will use fallback")
 
 
 class NeMoEmbeddingGenerator:
@@ -82,7 +100,9 @@ class NeMoEmbeddingGenerator:
             logger.info("Using CPU for NeMo (CUDA not available or not requested)")
 
     def _load_model(self) -> None:
-        """Load NeMo model and tokenizer.
+        """Load NeMo model and tokenizer using proper NeMo API.
+
+        Uses NeMo's TextEmbeddingModel for production-quality embeddings.
 
         Raises:
             DataSourceError: If model loading fails
@@ -90,33 +110,64 @@ class NeMoEmbeddingGenerator:
         if self._model is not None:
             return
 
+        # Check GPU memory before loading
+        if "cuda" in self.device:
+            # Estimate model memory: ~500MB-2GB depending on model size
+            estimated_memory = 2 * 1024 * 1024 * 1024  # 2GB estimate
+            has_memory, mem_info = check_gpu_memory(estimated_memory)
+            if not has_memory:
+                logger.warning(
+                    f"Insufficient GPU memory for NeMo model. "
+                    f"Required: {estimated_memory}, Available: {mem_info['free']}"
+                )
+                # Fallback to CPU
+                self.device = "cpu"
+                logger.info("Falling back to CPU for NeMo model")
+
         try:
-            # Try to import NeMo (check availability)
-            import importlib.util  # https://docs.python.org/3/library/importlib.html
-
-            nemo_spec = importlib.util.find_spec("nemo")
-            if nemo_spec is None:
-                raise ImportError("NeMo not installed")
-
-            logger.info(f"Loading NVIDIA NeMo model: {self.model_name}")
-
-            # Try to use proper NeMo API
-            # Note: Actual NeMo model loading depends on NeMo version and model type
-            # In production, use NeMo's model registry or checkpoint loading:
-            #   from nemo.collections.nlp.models import TextEmbeddingModel
-            #   self._model = TextEmbeddingModel.from_pretrained(self.model_name)
-            #   self._model = self._model.to(self.device)
-            #   self._model.eval()
-            # For now, use placeholder until NeMo is properly configured
-            self._model = None
-            self._tokenizer = None
-
-            logger.info("NVIDIA NeMo model loaded successfully (placeholder - implement actual loading)")
-        except ImportError:
-            logger.warning(
-                "NVIDIA NeMo not available. Install via: "
-                "pip install nemo_toolkit[all] or use transformers fallback"
-            )
+            if _NEMO_AVAILABLE:
+                logger.info(f"Loading NVIDIA NeMo model: {self.model_name}")
+                
+                # Use proper NeMo API for loading embedding models
+                # NeMo's TextEmbeddingModel handles model loading, tokenization, and GPU placement
+                try:
+                    self._model = TextEmbeddingModel.from_pretrained(
+                        self.model_name,
+                        map_location=self.device,
+                    )
+                    
+                    # Move to device and set to eval mode
+                    self._model = self._model.to(self.device)
+                    self._model.eval()
+                    
+                    # Get actual embedding dimension from model
+                    if hasattr(self._model, 'embedding_dim'):
+                        self._embedding_dim = self._model.embedding_dim
+                    elif hasattr(self._model, 'cfg') and hasattr(self._model.cfg, 'encoder'):
+                        # Try to infer from config
+                        encoder_cfg = self._model.cfg.encoder
+                        if hasattr(encoder_cfg, 'hidden_size'):
+                            self._embedding_dim = encoder_cfg.hidden_size
+                        else:
+                            self._embedding_dim = _DEFAULT_EMBEDDING_DIM
+                    else:
+                        self._embedding_dim = _DEFAULT_EMBEDDING_DIM
+                    
+                    logger.info(
+                        f"NVIDIA NeMo model loaded successfully: {self.model_name} "
+                        f"(embedding_dim={self._embedding_dim}, device={self.device})"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to load NeMo model {self.model_name}: {e}")
+                    logger.info("Falling back to transformers")
+                    self._model = None
+                    self._tokenizer = None
+            else:
+                logger.info("NVIDIA NeMo not available, will use transformers fallback")
+                self._model = None
+                self._tokenizer = None
+        except Exception as e:
+            logger.warning(f"Error loading NeMo model: {e}, using transformers fallback")
             self._model = None
             self._tokenizer = None
 
@@ -167,17 +218,39 @@ class NeMoEmbeddingGenerator:
 
         self._load_model()
 
-        with gpu_memory_cleanup():
+        with gpu_memory_cleanup() if "cuda" in self.device else _null_context():
             if self._model is None:
                 # Fallback to transformers if NeMo not available
                 logger.info("Using transformers fallback for embeddings")
                 return self._generate_with_transformers(texts)
 
-            # NeMo embedding generation (placeholder)
-            # In production, use proper NeMo API:
-            #   embeddings = self._model.encode(texts, batch_size=self.batch_size)
-            logger.warning("NeMo model not fully implemented, using transformers fallback")
-            return self._generate_with_transformers(texts)
+            # Use proper NeMo API for embedding generation
+            try:
+                # NeMo's TextEmbeddingModel has encode() method for batch processing
+                # It handles tokenization, batching, and GPU operations internally
+                with torch.no_grad():  # Disable gradients for inference
+                    embeddings = self._model.encode(
+                        texts,
+                        batch_size=self.batch_size,
+                        convert_to_tensor=True,
+                    )
+                    
+                    # Ensure embeddings are on correct device
+                    if isinstance(embeddings, torch.Tensor):
+                        if "cuda" in self.device and not embeddings.is_cuda:
+                            embeddings = embeddings.to(self.device, non_blocking=True)
+                        elif "cuda" not in self.device and embeddings.is_cuda:
+                            embeddings = embeddings.cpu()
+                        
+                        # Synchronize if on GPU
+                        if embeddings.is_cuda:
+                            torch.cuda.synchronize()
+                    
+                    logger.debug(f"Generated {len(texts)} embeddings using NeMo")
+                    return embeddings
+            except Exception as e:
+                logger.warning(f"NeMo embedding generation failed: {e}, falling back to transformers")
+                return self._generate_with_transformers(texts)
 
     def _generate_with_transformers(self, texts: List[str]) -> torch.Tensor:
         """Fallback embedding generation using transformers library.
@@ -261,11 +334,20 @@ class NeMoEmbeddingGenerator:
         Returns:
             Embedding dimension
         """
-        if self._model is None:
-            # Default for sentence-transformers fallback
-            return _DEFAULT_EMBEDDING_DIM
-        # NeMo model dimension (placeholder)
-        return 768
+        if hasattr(self, '_embedding_dim'):
+            return self._embedding_dim
+        
+        if self._model is not None:
+            # Try to get from model
+            if hasattr(self._model, 'embedding_dim'):
+                return self._model.embedding_dim
+            elif hasattr(self._model, 'cfg'):
+                encoder_cfg = getattr(self._model.cfg, 'encoder', None)
+                if encoder_cfg and hasattr(encoder_cfg, 'hidden_size'):
+                    return encoder_cfg.hidden_size
+        
+        # Default for sentence-transformers fallback
+        return _DEFAULT_EMBEDDING_DIM
 
 
 class NeMoTextProcessor:

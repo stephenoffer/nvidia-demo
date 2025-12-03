@@ -132,7 +132,7 @@ class InstructionGroundingStage(ProcessorBase):
             Instruction text or None
         """
         from pipeline.utils.field_extraction import extract_field
-        from pipeline.utils.data_types import extract_text
+        from pipeline.utils.data.data_types import extract_text
 
         instruction = extract_field(
             item,
@@ -159,7 +159,7 @@ class InstructionGroundingStage(ProcessorBase):
             Trajectory dictionary or None
         """
         from pipeline.utils.field_extraction import extract_field
-        from pipeline.utils.data_types import extract_sensor_data
+        from pipeline.utils.data.data_types import extract_sensor_data
 
         trajectory = extract_field(item, self.trajectory_field)
         if isinstance(trajectory, dict):

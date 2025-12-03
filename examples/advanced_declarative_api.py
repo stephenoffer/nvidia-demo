@@ -136,13 +136,13 @@ def main():
             logger.warning("No mock data files found. Please run: python examples/create_mock_data.py")
             sources = [{"type": "parquet", "path": str(data_dir)}]  # Fallback
         
-        # Add public video source for testing
+        # Add public video source for testing (always available, no credentials needed)
         sources.append({
             "type": "video",
             "path": "s3://anonymous@ray-example-data/basketball.mp4",
             "extract_frames": True,
             "frame_rate": 30,
-            "max_frames": 100,
+            "max_frames": 100,  # Limit for faster execution
         })
         
         output_path = str(test_output / "curated")
@@ -152,60 +152,16 @@ def main():
         output_path = "s3://robotics-data/curated/"
     
     if not use_local_data:
-        # Use S3 paths for advanced example
+        # Use public S3 video (always available, no credentials needed)
+        logger.info("Using public S3 video (no credentials needed)")
+        logger.info("To use local mock data, run: python examples/create_mock_data.py")
         sources = [
-            # Video data sources (using public Ray example data)
             {
                 "type": "video",
                 "path": "s3://anonymous@ray-example-data/basketball.mp4",
                 "extract_frames": True,
                 "frame_rate": 30,
-                "max_frames": 100,
-            },
-            # MCAP (ROS2 message capture) files
-            {
-                "type": "mcap",
-                "path": "s3://robotics-data/rosbags/",
-                "topics": ["/camera/image_raw", "/imu/data", "/lidar/points"],
-                "time_range": [0, 3600000000000],  # nanoseconds
-                "include_metadata": True,
-            },
-            # ROS1 bag files
-            {
-                "type": "rosbag",
-                "path": "s3://robotics-data/ros1_bags/",
-                "topics": ["/camera/image_raw", "/odom"],
-            },
-            # HDF5 sensor data
-            {
-                "type": "hdf5",
-                "path": "s3://robotics-data/sensor_data/",
-                "datasets": ["joint_positions", "joint_velocities", "base_pose"],
-            },
-            # Point cloud data
-            {
-                "type": "pointcloud",
-                "path": "s3://robotics-data/pointclouds/",
-            },
-            # NumPy arrays
-            {
-                "type": "numpy",
-                "path": "s3://robotics-data/arrays/",
-            },
-            # Isaac Lab simulation data
-            {
-                "type": "isaac_lab",
-                "path": "s3://robotics-data/isaac_lab/",
-                "robot_type": "humanoid",
-                "include_observations": True,
-                "include_actions": True,
-                "include_rewards": True,
-            },
-            # Cosmos Dreams synthetic videos
-            {
-                "type": "cosmos_dreams",
-                "path": "s3://robotics-data/cosmos_dreams/",
-                "include_metadata": True,
+                "max_frames": 100,  # Limit for faster execution
             },
         ]
     
