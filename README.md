@@ -579,7 +579,7 @@ graph TB
     subgraph "Pythonic Features"
         E[len<br/>Shape<br/>Columns]
         F[Indexing<br/>Slicing<br/>Attribute Access]
-        G[Operators<br/>+, |, ==]
+        G[Operators<br/>+, or, ==]
     end
     
     A --> E
