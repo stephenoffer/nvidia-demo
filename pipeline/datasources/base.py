@@ -32,10 +32,10 @@ class FileBasedDatasource(RayFileBasedDatasource):
     Subclasses must implement _read_stream() which takes a pyarrow.NativeFile
     and yields Block objects using ArrowBlockBuilder.
 
-    IMPORTANT: Metadata Handling
+    Metadata handling:
     - Path metadata: Ray Data automatically adds "path" column when include_paths=True.
-      Subclasses should NOT manually add "path" fields to records.
-    - Format/data_type: Do NOT add generic "format" or "data_type" fields.
+      Subclasses should not manually add "path" fields to records.
+    - Format/data_type: Do not add generic "format" or "data_type" fields.
       Return clean data with domain-specific columns.
     - Domain metadata: Only add domain-specific metadata that provides value
       (e.g., "dataset_name" for HDF5, "topic" for ROS bags).
