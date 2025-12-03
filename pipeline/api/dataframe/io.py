@@ -201,40 +201,65 @@ class IOMixin:
             logger.error(f"Failed to write to {path}: {e}")
             raise RuntimeError(f"Failed to write to {path}: {e}") from e
     
-    # Specific write methods (delegated to write() or direct Ray Data calls)
-    def write_parquet(self, path: str, **write_kwargs: Any) -> None:
-        """Write to Parquet files."""
+    # Pandas-style to_* methods (primary API)
+    def to_parquet(self, path: str, **write_kwargs: Any) -> None:
+        """Write to Parquet files (Pandas-style)."""
         if not path or not isinstance(path, str):
             raise ValueError(f"path must be a non-empty string, got {path}")
         self._dataset.write_parquet(path, **write_kwargs)
     
-    def write_json(self, path: str, **write_kwargs: Any) -> None:
-        """Write to JSON files."""
+    def to_json(self, path: str, **write_kwargs: Any) -> None:
+        """Write to JSON files (Pandas-style)."""
         if not path or not isinstance(path, str):
             raise ValueError(f"path must be a non-empty string, got {path}")
         self._dataset.write_json(path, **write_kwargs)
     
-    def write_csv(self, path: str, **write_kwargs: Any) -> None:
-        """Write to CSV files."""
+    def to_csv(self, path: str, **write_kwargs: Any) -> None:
+        """Write to CSV files (Pandas-style)."""
         if not path or not isinstance(path, str):
             raise ValueError(f"path must be a non-empty string, got {path}")
         self._dataset.write_csv(path, **write_kwargs)
     
-    def write_numpy(self, path: str, **write_kwargs: Any) -> None:
+    def to_numpy(self, path: str, **write_kwargs: Any) -> None:
         """Write to NumPy files."""
         if not path or not isinstance(path, str):
             raise ValueError(f"path must be a non-empty string, got {path}")
         self._dataset.write_numpy(path, **write_kwargs)
     
-    def write_tfrecords(self, path: str, **write_kwargs: Any) -> None:
+    def to_tfrecords(self, path: str, **write_kwargs: Any) -> None:
         """Write to TFRecord files."""
         if not path or not isinstance(path, str):
             raise ValueError(f"path must be a non-empty string, got {path}")
         self._dataset.write_tfrecords(path, **write_kwargs)
     
-    def write_images(self, path: str, **write_kwargs: Any) -> None:
+    def to_images(self, path: str, **write_kwargs: Any) -> None:
         """Write images to directory."""
         if not path or not isinstance(path, str):
             raise ValueError(f"path must be a non-empty string, got {path}")
         self._dataset.write_images(path, **write_kwargs)
+    
+    # Ray Data-style write_* methods (aliases for compatibility)
+    def write_parquet(self, path: str, **write_kwargs: Any) -> None:
+        """Write to Parquet (alias for to_parquet())."""
+        self.to_parquet(path, **write_kwargs)
+    
+    def write_json(self, path: str, **write_kwargs: Any) -> None:
+        """Write to JSON (alias for to_json())."""
+        self.to_json(path, **write_kwargs)
+    
+    def write_csv(self, path: str, **write_kwargs: Any) -> None:
+        """Write to CSV (alias for to_csv())."""
+        self.to_csv(path, **write_kwargs)
+    
+    def write_numpy(self, path: str, **write_kwargs: Any) -> None:
+        """Write to NumPy (alias for to_numpy())."""
+        self.to_numpy(path, **write_kwargs)
+    
+    def write_tfrecords(self, path: str, **write_kwargs: Any) -> None:
+        """Write to TFRecord (alias for to_tfrecords())."""
+        self.to_tfrecords(path, **write_kwargs)
+    
+    def write_images(self, path: str, **write_kwargs: Any) -> None:
+        """Write images (alias for to_images())."""
+        self.to_images(path, **write_kwargs)
 

@@ -7,27 +7,27 @@ Prefect, Metaflow, MLflow, Ray Data, Spark, and Polars.
 
 Quick Start:
     ```python
-    from pipeline.api import quick_start, PipelineBuilder, PipelineDataFrame
+    from pipeline.api import pipeline, PipelineBuilder, read
     
-    # Simple pipeline
-    pipeline = quick_start(
-        input_paths="s3://bucket/data/",
-        output_path="s3://bucket/output/",
+    # Simple function API
+    p = pipeline(
+        sources="s3://bucket/data/",
+        output="s3://bucket/output/",
     )
-    results = pipeline.run()
+    results = p.run()
     
-    # Fluent builder
-    pipeline = (
+    # Fluent builder (short names)
+    p = (
         PipelineBuilder()
-        .add_source("video", "s3://bucket/videos/")
-        .add_profiler(profile_columns=["image"])
-        .set_output("s3://bucket/output/")
+        .source("video", "s3://bucket/videos/")
+        .profile(profile_columns=["image"])
+        .output("s3://bucket/output/")
         .build()
     )
-    results = pipeline.run()
+    results = p.run()
     
     # DataFrame API
-    df = PipelineDataFrame.from_paths("s3://bucket/data/")
+    df = read("s3://bucket/data/")
     results = df.filter(lambda x: x["quality"] > 0.8).collect()
     ```
 """
@@ -42,17 +42,16 @@ from pipeline.api.fluent import (
     task,
 )
 from pipeline.api.helpers import (
-    convert_dataframe_to_pipeline,
-    create_cosmos_dreams_pipeline,
-    create_inference_pipeline,
-    create_isaac_lab_pipeline,
-    create_omniverse_pipeline,
-    create_profiling_pipeline,
-    create_simple_pipeline,
-    create_validation_pipeline,
-    dataframe_from_dataset,
-    dataframe_from_paths,
-    quick_start,
+    cosmos,
+    infer,
+    isaac,
+    omniverse,
+    pipeline,
+    profile,
+    read,
+    simple,
+    to_pipeline,
+    validate,
 )
 from pipeline.api.multipipeline import MultiPipelineRunner
 
@@ -71,16 +70,15 @@ __all__ = [
     "experiment",
     "run_pipeline",
     # Convenience functions
-    "quick_start",
-    "dataframe_from_paths",
-    "dataframe_from_dataset",
-    "create_simple_pipeline",
-    "create_inference_pipeline",
-    "create_profiling_pipeline",
-    "create_validation_pipeline",
-    "create_isaac_lab_pipeline",
-    "create_omniverse_pipeline",
-    "create_cosmos_dreams_pipeline",
-    "convert_dataframe_to_pipeline",
+    "pipeline",
+    "read",
+    "simple",
+    "infer",
+    "profile",
+    "validate",
+    "isaac",
+    "omniverse",
+    "cosmos",
+    "to_pipeline",
 ]
 

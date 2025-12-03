@@ -306,26 +306,26 @@ class Pipeline:
         )
 
     @classmethod
-    def quick_start(
+    def create(
         cls,
-        input_paths: Union[str, List[str]],
-        output_path: str,
+        sources: Union[str, List[str], List[Dict[str, Any]]],
+        output: str,
         enable_gpu: bool = False,
         num_gpus: int = 0,
+        num_cpus: Optional[int] = None,
         **kwargs: Any,
     ) -> "Pipeline":
-        """Quick start constructor for simple pipeline creation.
+        """Create a pipeline from data sources.
 
-        Creates a pipeline with minimal configuration for common use cases.
-        
-        This is the simplest way to create a pipeline - just provide input and output paths.
-        The pipeline will auto-detect data formats and use sensible defaults.
+        Declarative API for creating pipelines with automatic configuration.
+        Auto-detects data formats and applies sensible defaults.
 
         Args:
-            input_paths: Single path or list of input paths
-            output_path: Output path for processed data
-            enable_gpu: Enable GPU acceleration (deprecated, use num_gpus instead)
-            num_gpus: Number of GPUs to use (0 = CPU only, overrides enable_gpu)
+            sources: Single path (str), list of paths (List[str]), or list of source configs (List[Dict])
+            output: Output path for processed data
+            enable_gpu: Enable GPU acceleration
+            num_gpus: Number of GPUs to use (0 = CPU only)
+            num_cpus: Number of CPUs to use (None = auto-detect)
             **kwargs: Additional pipeline configuration
 
         Returns:
@@ -333,27 +333,40 @@ class Pipeline:
 
         Example:
             ```python
-            # Single path
-            pipeline = Pipeline.quick_start(
-                input_paths="s3://bucket/data/",
-                output_path="s3://bucket/output/",
+            # Single path - auto-detect format
+            pipeline = Pipeline.create(
+                sources="s3://bucket/data/",
+                output="s3://bucket/output/",
             )
-            results = pipeline.run()
             
-            # Multiple paths with GPU
-            pipeline = Pipeline.quick_start(
-                input_paths=["s3://bucket/videos/", "s3://bucket/rosbags/"],
-                output_path="s3://bucket/output/",
+            # Multiple paths
+            pipeline = Pipeline.create(
+                sources=["s3://bucket/videos/", "s3://bucket/rosbags/"],
+                output="s3://bucket/output/",
                 num_gpus=4,
             )
-            results = pipeline.run()
+            
+            # Explicit source configuration
+            pipeline = Pipeline.create(
+                sources=[
+                    {"type": "video", "path": "s3://bucket/videos/"},
+                    {"type": "mcap", "path": "s3://bucket/rosbags/"},
+                ],
+                output="s3://bucket/output/",
+            )
             ```
         """
-        if isinstance(input_paths, str):
-            input_paths = [input_paths]
+        # Normalize sources to list of dicts
+        if isinstance(sources, str):
+            sources = [{"type": "auto", "path": sources}]
+        elif isinstance(sources, list) and sources:
+            if isinstance(sources[0], str):
+                # List of paths - convert to source configs
+                sources = [{"type": "auto", "path": path} for path in sources]
+            # Otherwise assume list of dicts already
         
-        if not input_paths:
-            raise ValueError("At least one input path must be provided")
+        if not sources:
+            raise ValueError("At least one source must be provided")
         
         # Use num_gpus if provided, otherwise use enable_gpu
         if num_gpus > 0:
@@ -361,16 +374,46 @@ class Pipeline:
         elif enable_gpu and num_gpus == 0:
             num_gpus = 1  # Default to 1 GPU if enable_gpu=True but num_gpus not specified
         
-        sources = [{"type": "auto", "path": path} for path in input_paths]
-        
         # Set sensible defaults if not provided
         if "num_cpus" not in kwargs:
-            kwargs["num_cpus"] = None  # Auto-detect
+            kwargs["num_cpus"] = num_cpus  # Use provided value or None
         if "batch_size" not in kwargs:
-            kwargs["batch_size"] = 1000  # Default batch size
+            kwargs["batch_size"] = None  # Auto-tune by default
         
         return cls(
             sources=sources,
+            output=output,
+            enable_gpu=enable_gpu,
+            num_gpus=num_gpus,
+            **kwargs,
+        )
+    
+    @classmethod
+    def from_paths(
+        cls,
+        input_paths: Union[str, List[str]],
+        output_path: str,
+        enable_gpu: bool = False,
+        num_gpus: int = 0,
+        **kwargs: Any,
+    ) -> "Pipeline":
+        """Create pipeline from input paths (alias for create()).
+        
+        This is a convenience alias for Pipeline.create() for backward compatibility.
+        Prefer using Pipeline.create() for new code.
+        
+        Args:
+            input_paths: Single path or list of input paths
+            output_path: Output path for processed data
+            enable_gpu: Enable GPU acceleration
+            num_gpus: Number of GPUs to use
+            **kwargs: Additional pipeline configuration
+            
+        Returns:
+            Configured Pipeline instance
+        """
+        return cls.create(
+            sources=input_paths,
             output=output_path,
             enable_gpu=enable_gpu,
             num_gpus=num_gpus,
@@ -378,16 +421,18 @@ class Pipeline:
         )
 
     @classmethod
-    def cpu_demo(
+    def cpu(
         cls,
-        sources: List[Dict[str, Any]],
+        sources: Union[str, List[str], List[Dict[str, Any]]],
         output: str,
         **kwargs: Any,
     ) -> "Pipeline":
-        """Convenience constructor for CPU-only local demos.
+        """Create a CPU-only pipeline.
+        
+        Creates a pipeline configured for CPU-only execution.
         
         Args:
-            sources: List of data source configurations
+            sources: Single path, list of paths, or list of source configurations
             output: Output path for curated data
             **kwargs: Additional configuration options
             
@@ -396,14 +441,15 @@ class Pipeline:
             
         Example:
             ```python
-            pipeline = Pipeline.cpu_demo(
-                sources=[{"type": "video", "path": "local/videos/"}],
-                output="local/output/",
+            # CPU-only pipeline
+            pipeline = Pipeline.cpu(
+                sources="s3://bucket/data/",
+                output="s3://bucket/output/",
             )
             results = pipeline.run()
             ```
         """
-        return cls(
+        return cls.create(
             sources=sources,
             output=output,
             enable_gpu=False,

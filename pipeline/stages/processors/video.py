@@ -26,13 +26,13 @@ from pipeline.utils.data.data_types import get_data_type, DataType
 
 logger = logging.getLogger(__name__)
 
-# CRITICAL: Fractional GPU allocation may not work correctly
+# Fractional GPU allocation may not work correctly
 # Changed to integer allocation for reliability
 _ACTOR_GPUS = 1
 _ACTOR_CPUS = 2
 
 
-# CRITICAL: Fractional GPU allocation (0.25) may not work correctly in all Ray versions
+# Fractional GPU allocation (0.25) may not work correctly in all Ray versions
 # Ray's fractional GPU support is experimental and may cause resource allocation issues
 # Use integer GPU allocation (1) or verify fractional GPU support in your Ray version
 @ray.remote(num_gpus=1, num_cpus=2, memory=4 * 1024 * 1024 * 1024)  # 4GB memory limit
@@ -200,7 +200,7 @@ class VideoProcessor(ProcessorBase):
         # Use ActorPoolStrategy for efficient actor reuse
         # Creates a pool of actors that are reused across batches
         # Calculate pool size based on available GPUs
-        # CRITICAL: Calculate pool size based on integer GPU allocation
+        # Calculate pool size based on integer GPU allocation
         # Each actor uses 1 GPU, so pool size = num_gpus
         if self.config and hasattr(self.config, "num_gpus") and self.config.num_gpus > 0:
             pool_size = min(4, max(1, self.config.num_gpus))  # Each actor uses 1 GPU

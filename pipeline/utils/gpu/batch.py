@@ -35,7 +35,7 @@ def gpu_batch_aggregate(
 ) -> pd.DataFrame:
     """GPU-accelerated batch aggregation.
 
-    CRITICAL: This function operates on INDIVIDUAL BATCHES only. It does NOT perform
+    This function operates on individual batches only. It does not perform
     global aggregations across the entire dataset. For global aggregations that require
     seeing all data, use Ray Data's native aggregate() function with AggregateFnV2:
     
@@ -51,7 +51,7 @@ def gpu_batch_aggregate(
     )
     ```
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas".
 
     Args:
@@ -80,7 +80,7 @@ def gpu_batch_transform(
 ) -> pd.DataFrame:
     """GPU-accelerated batch transformation.
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas":
     
     ```python
@@ -112,7 +112,7 @@ def gpu_batch_sort(
 ) -> pd.DataFrame:
     """GPU-accelerated batch sorting.
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas":
     
     ```python
@@ -145,7 +145,7 @@ def gpu_batch_groupby(
 ) -> pd.DataFrame:
     """GPU-accelerated batch groupby operation.
 
-    CRITICAL: This function operates on INDIVIDUAL BATCHES only. It does NOT perform
+    This function operates on individual batches only. It does not perform
     global groupby operations across the entire dataset. For global groupby that requires
     seeing all data, use Ray Data's native groupby() function instead:
     
@@ -161,7 +161,7 @@ def gpu_batch_groupby(
     )
     ```
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas".
 
     Args:

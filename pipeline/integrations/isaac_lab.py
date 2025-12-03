@@ -1,17 +1,7 @@
 """Integration with NVIDIA Isaac Lab for simulation data.
 
 Isaac Lab is NVIDIA's open-source robotics simulation framework.
-See: https://github.com/NVIDIA/Isaac-Lab
-
 Uses Ray Data for distributed dataset processing with GPU acceleration.
-See: https://docs.ray.io/en/latest/data/data.html
-
-CRITICAL IMPROVEMENTS:
-- Uses actual Isaac Lab trajectory API when available
-- Leverages GPU-accelerated simulation data loading
-- Proper CUDA memory management
-- GPU object store support for Ray Data
-- Multi-GPU parallel simulation support
 """
 
 from __future__ import annotations
@@ -29,6 +19,7 @@ from pipeline.exceptions import DataSourceError
 from pipeline.utils.decorators import handle_errors, log_execution_time
 from pipeline.utils.constants import _DEFAULT_BATCH_SIZE
 from pipeline.utils.gpu.memory import get_cuda_device, gpu_memory_cleanup, check_gpu_memory
+from pipeline.utils.domain_randomization import DomainRandomizer, DomainRandomizationConfig
 from contextlib import nullcontext as _null_context
 
 logger = logging.getLogger(__name__)
@@ -58,16 +49,9 @@ except ImportError:
 class IsaacLabLoader:
     """Loader for Isaac Lab simulation data.
 
-    Isaac Lab generates massive amounts of simulation data for robot training,
-    including joint angles, observations, actions, and rewards. This loader
-    processes Isaac Lab trajectories and integrates them into the curation pipeline.
-
-    CRITICAL IMPROVEMENTS:
-    - Uses Isaac Lab's trajectory API when available (not just file reading)
-    - GPU-accelerated data loading with proper CUDA memory management
-    - Leverages Ray Data GPU object store for RDMA transfers
-    - Multi-GPU parallel simulation support
-    - Proper observation/action space parsing using Isaac Lab's API
+    Processes Isaac Lab trajectories and integrates them into the curation pipeline.
+    Uses Isaac Lab's trajectory API when available, with GPU-accelerated data loading
+    and Ray Data GPU object store support.
     """
 
     def __init__(
@@ -87,6 +71,8 @@ class IsaacLabLoader:
         use_gpu: bool = True,
         use_gpu_object_store: bool = True,
         num_gpus: Optional[int] = None,
+        enable_domain_randomization: bool = False,
+        num_parallel_environments: int = 4096,
     ):
         """Initialize Isaac Lab loader.
 
@@ -266,6 +252,14 @@ class IsaacLabLoader:
             
             combined = ray.data.union(*datasets) if len(datasets) > 1 else datasets[0]
             
+            # Apply domain randomization if enabled
+            if self.enable_domain_randomization and self.domain_randomizer:
+                combined = combined.map_batches(
+                    self._apply_domain_randomization_batch,
+                    batch_size=self.batch_size,
+                    batch_format="pandas",
+                )
+            
             # Format batches with GPU acceleration
             return combined.map_batches(
                 self._format_batch,
@@ -275,6 +269,36 @@ class IsaacLabLoader:
             )
         except Exception as e:
             raise DataSourceError(f"Failed to load with Isaac Lab API: {e}") from e
+    
+    def _apply_domain_randomization_batch(self, batch):
+        """Apply domain randomization to a batch of simulation data.
+        
+        Args:
+            batch: Batch of simulation data
+            
+        Returns:
+            Randomized batch
+        """
+        if not self.domain_randomizer:
+            return batch
+        
+        import pandas as pd
+        
+        if isinstance(batch, pd.DataFrame):
+            randomized_rows = []
+            for _, row in batch.iterrows():
+                row_dict = row.to_dict()
+                env_config = self.domain_randomizer.generate_randomized_environment()
+                row_dict["domain_randomization"] = env_config
+                randomized_rows.append(row_dict)
+            return pd.DataFrame(randomized_rows)
+        else:
+            randomized = []
+            for item in batch:
+                env_config = self.domain_randomizer.generate_randomized_environment()
+                item["domain_randomization"] = env_config
+                randomized.append(item)
+            return randomized
     
     def _load_from_files(self) -> Dataset:
         """Load Isaac Lab data from files (fallback method).

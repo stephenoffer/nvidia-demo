@@ -5,44 +5,44 @@ Demonstrates the simplest ways to use the pipeline API for common tasks.
 
 from pipeline.api import (
     PipelineBuilder,
-    PipelineDataFrame,
-    create_inference_pipeline,
-    create_profiling_pipeline,
-    create_simple_pipeline,
-    create_validation_pipeline,
-    dataframe_from_paths,
-    quick_start,
+    infer,
+    pipeline,
+    profile,
+    read,
+    simple,
+    to_pipeline,
+    validate,
 )
 
 
 def example_quick_start():
     """Simplest way to create and run a pipeline."""
-    # One-liner pipeline creation
-    pipeline = quick_start(
-        input_paths="s3://bucket/data/",
-        output_path="s3://bucket/output/",
+    # Simple function API
+    p = pipeline(
+        sources="s3://bucket/data/",
+        output="s3://bucket/output/",
     )
-    results = pipeline.run()
+    results = p.run()
 
 
 def example_quick_start_multiple_paths():
     """Quick start with multiple input paths."""
-    pipeline = quick_start(
-        input_paths=[
+    p = pipeline(
+        sources=[
             "s3://bucket/videos/",
             "s3://bucket/rosbags/",
             "s3://bucket/sensor_data/",
         ],
-        output_path="s3://bucket/output/",
-        enable_gpu=True,
+        output="s3://bucket/output/",
+        num_gpus=4,
     )
-    results = pipeline.run()
+    results = p.run()
 
 
 def example_dataframe_quick_start():
     """Quick start using DataFrame API."""
     # Load data
-    df = dataframe_from_paths("s3://bucket/data/")
+    df = read("s3://bucket/data/")
     
     # Transform
     processed = (
@@ -51,36 +51,36 @@ def example_dataframe_quick_start():
         .map(lambda x: {**x, "processed": True})
     )
     
-    # Write results
-    processed.write_parquet("s3://bucket/output/")
+    # Write results (Pandas-style)
+    processed.to_parquet("s3://bucket/output/")
 
 
 def example_inference_pipeline():
     """Quick start for batch inference."""
-    pipeline = create_inference_pipeline(
+    p = infer(
         input_path="s3://bucket/inference_data/",
         output_path="s3://bucket/predictions/",
         model_uri="models:/groot-model/Production",
         input_column="image",
         use_gpu=True,
     )
-    results = pipeline.run()
+    results = p.run()
 
 
 def example_profiling_pipeline():
     """Quick start for data profiling."""
-    pipeline = create_profiling_pipeline(
+    p = profile(
         input_path="s3://bucket/data/",
         output_path="s3://bucket/profiled/",
         profile_columns=["image", "sensor_data"],
         use_gpu=True,
     )
-    results = pipeline.run()
+    results = p.run()
 
 
 def example_validation_pipeline():
     """Quick start for schema validation."""
-    pipeline = create_validation_pipeline(
+    p = validate(
         input_path="s3://bucket/data/",
         output_path="s3://bucket/validated/",
         expected_schema={
@@ -90,7 +90,7 @@ def example_validation_pipeline():
         },
         strict=True,
     )
-    results = pipeline.run()
+    results = p.run()
 
 
 def example_simple_pipeline_with_custom_stage():
@@ -99,35 +99,35 @@ def example_simple_pipeline_with_custom_stage():
         """Filter out None values."""
         return {k: v for k, v in batch.items() if v is not None}
     
-    pipeline = create_simple_pipeline(
+    p = simple(
         input_path="s3://bucket/data/",
         output_path="s3://bucket/output/",
         stages=[custom_filter],
     )
-    results = pipeline.run()
+    results = p.run()
 
 
 def example_fluent_builder_quick():
     """Quick fluent builder example."""
-    pipeline = (
+    p = (
         PipelineBuilder()
-        .add_source("auto", "s3://bucket/data/")
-        .add_profiler(profile_columns=["image"])
-        .set_output("s3://bucket/output/")
+        .source("auto", "s3://bucket/data/")
+        .profile(profile_columns=["image"])
+        .output("s3://bucket/output/")
         .build()
     )
-    results = pipeline.run()
+    results = p.run()
 
 
 def example_dataframe_to_pipeline():
     """Convert DataFrame to Pipeline."""
     # Start with DataFrame API
-    df = PipelineDataFrame.from_paths("s3://bucket/data/")
+    df = read("s3://bucket/data/")
     filtered_df = df.filter(lambda x: x["quality"] > 0.8)
     
     # Convert to pipeline for further processing
-    pipeline = filtered_df.to_pipeline("s3://bucket/output/")
-    results = pipeline.run()
+    p = to_pipeline(filtered_df, "s3://bucket/output/")
+    results = p.run()
 
 
 if __name__ == "__main__":

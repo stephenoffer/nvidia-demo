@@ -1,4 +1,4 @@
-"""NVIDIA Demo Suite - Impressive local demonstrations of GPU-accelerated multimodal data pipeline."""
+"""NVIDIA Pipeline Examples - Comprehensive examples demonstrating GPU-accelerated multimodal data pipeline capabilities."""
 
 __version__ = "1.0.0"
 

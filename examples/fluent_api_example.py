@@ -12,17 +12,17 @@ def example_fluent_builder():
     """Example using the fluent builder pattern."""
     pipeline = (
         PipelineBuilder()
-        .add_source("video", "s3://bucket/videos/")
-        .add_source("mcap", "s3://bucket/rosbags/")
-        .add_profiler(profile_columns=["image", "sensor_data"], use_gpu=True)
-        .add_validator(expected_schema={"image": list, "text": str})
-        .add_inference(
+        .source("video", "s3://bucket/videos/")
+        .source("mcap", "s3://bucket/rosbags/")
+        .profile(profile_columns=["image", "sensor_data"], use_gpu=True)
+        .validate(expected_schema={"image": list, "text": str})
+        .infer(
             model_uri="models:/groot-model/Production",
             input_column="image",
             use_tensorrt=True,
         )
-        .set_output("s3://bucket/output/")
-        .enable_gpu(num_gpus=4)
+        .output("s3://bucket/output/")
+        .gpu(num_gpus=4)
         .build()
     )
     
@@ -51,10 +51,10 @@ def example_decorator_tasks():
     """Example using decorator-based task definitions."""
     pipeline = (
         PipelineBuilder()
-        .add_source("video", "s3://bucket/videos/")
-        .add_stage(process_video_batch)
-        .add_stage(extract_custom_features)
-        .set_output("s3://bucket/output/")
+        .source("video", "s3://bucket/videos/")
+        .stage(process_video_batch)
+        .stage(extract_custom_features)
+        .output("s3://bucket/output/")
         .build()
     )
     
@@ -71,10 +71,10 @@ def example_experiment_tracking_mlflow():
     ):
         pipeline = (
             PipelineBuilder()
-            .add_source("video", "s3://bucket/videos/")
-            .add_profiler(profile_columns=["image"])
-            .add_inference(model_uri="models:/groot-model/Production")
-            .set_output("s3://bucket/output/")
+            .source("video", "s3://bucket/videos/")
+            .profile(profile_columns=["image"])
+            .infer(model_uri="models:/groot-model/Production")
+            .output("s3://bucket/output/")
             .build()
         )
         
@@ -93,10 +93,10 @@ def example_experiment_tracking_wandb():
     ):
         pipeline = (
             PipelineBuilder()
-            .add_source("video", "s3://bucket/videos/")
-            .add_profiler(profile_columns=["image"])
-            .add_inference(model_uri="models:/groot-model/Production")
-            .set_output("s3://bucket/output/")
+            .source("video", "s3://bucket/videos/")
+            .profile(profile_columns=["image"])
+            .infer(model_uri="models:/groot-model/Production")
+            .output("s3://bucket/output/")
             .build()
         )
         
@@ -114,10 +114,10 @@ def example_experiment_tracking_both():
     ):
         pipeline = (
             PipelineBuilder()
-            .add_source("video", "s3://bucket/videos/")
-            .add_profiler(profile_columns=["image"])
-            .add_inference(model_uri="models:/groot-model/Production")
-            .set_output("s3://bucket/output/")
+            .source("video", "s3://bucket/videos/")
+            .profile(profile_columns=["image"])
+            .infer(model_uri="models:/groot-model/Production")
+            .output("s3://bucket/output/")
             .build()
         )
         
@@ -140,9 +140,9 @@ def example_method_chaining():
     )
     
     # Chain method calls
-    pipeline.add_profiler(profile_columns=["image"], use_gpu=True)
-    pipeline.add_validator(expected_schema={"image": list})
-    pipeline.add_inference(
+    pipeline.profile(profile_columns=["image"], use_gpu=True)
+    pipeline.validate(expected_schema={"image": list})
+    pipeline.infer(
         model_uri="models:/groot-model/Production",
         use_tensorrt=True,
     )
@@ -163,17 +163,17 @@ def example_method_chaining():
     )
 
 
-# Example 5: Quick Start (inspired by MLflow)
+# Example 5: Simple Function API
 def example_quick_start():
-    """Example using quick_start for simple use cases."""
-    from pipeline.api import Pipeline
+    """Example using simple function API."""
+    from pipeline.api import pipeline
     
-    pipeline = Pipeline.quick_start(
-        input_path="s3://bucket/data/",
-        output_path="s3://bucket/curated/",
+    p = pipeline(
+        sources="s3://bucket/data/",
+        output="s3://bucket/curated/",
     )
     
-    results = pipeline.run()
+    results = p.run()
 
 
 if __name__ == "__main__":

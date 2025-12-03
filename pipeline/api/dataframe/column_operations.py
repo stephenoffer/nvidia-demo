@@ -15,10 +15,10 @@ from pipeline.api.dataframe.shared import validate_columns
 class ColumnOperationsMixin:
     """Mixin class for column manipulation operations."""
     
-    def drop_columns(self, columns: Union[str, list[str]]) -> "PipelineDataFrame":
+    def drop(self, columns: Union[str, list[str]]) -> "PipelineDataFrame":
         """Drop columns from DataFrame.
 
-        Uses Ray Data's native drop_columns() for better performance.
+        Pandas-style method name. Uses Ray Data's native drop_columns() for better performance.
 
         Args:
             columns: Column name(s) to drop
@@ -31,8 +31,8 @@ class ColumnOperationsMixin:
 
         Example:
             ```python
-            df.drop_columns("unused_col")
-            df.drop_columns(["col1", "col2"])
+            df.drop("unused_col")
+            df.drop(["col1", "col2"])
             ```
         """
         if isinstance(columns, str):
@@ -44,13 +44,36 @@ class ColumnOperationsMixin:
         # Use Ray Data's native drop_columns for better performance
         dropped = self._dataset.drop_columns(columns)
         return self._create_dataframe(dropped)
+
+    def drop_columns(self, columns: Union[str, list[str]]) -> "PipelineDataFrame":
+        """Drop columns (alias for drop())."""
+        return self.drop(columns)
+    
+    def assign(self, **kwargs: Any) -> "PipelineDataFrame":
+        """Assign new columns (Pandas-style).
+
+        Args:
+            **kwargs: Column name-value pairs
+
+        Returns:
+            New PipelineDataFrame with assigned columns
+
+        Example:
+            ```python
+            df.assign(status="active", priority=1)
+            ```
+        """
+        result = self._dataset
+        for name, value in kwargs.items():
+            result = result.add_column(name, value)
+        return self._create_dataframe(result)
     
     def add_column(
         self,
         name: str,
         value: Any,
     ) -> "PipelineDataFrame":
-        """Add a constant column.
+        """Add a constant column (alias for assign()).
 
         Uses Ray Data's native add_column() for better performance.
 
@@ -66,6 +89,5 @@ class ColumnOperationsMixin:
             df.add_column("status", "active")
             ```
         """
-        added = self._dataset.add_column(name, value)
-        return self._create_dataframe(added)
+        return self.assign(**{name: value})
 

@@ -1185,14 +1185,18 @@ class GrootVLA(nn.Module):
         
         # System 1: Fast action generation
         if self.training and actions is not None:
-            predicted_noise, actual_noise = self.system1(reasoning, actions, timesteps)  # [B, action_dim]
+            predicted_noise, actual_noise = self.system1(
+                reasoning_features=reasoning,
+                actions=actions,
+                timesteps=timesteps,
+            )
             return {
                 "predicted_noise": predicted_noise,
                 "actual_noise": actual_noise,
                 "reasoning": reasoning,
             }
         else:
-            sampled_actions, _ = self.system1(reasoning)  # [B, action_dim]
+            sampled_actions, _ = self.system1(reasoning_features=reasoning)
             return {
                 "actions": sampled_actions,
                 "reasoning": reasoning,

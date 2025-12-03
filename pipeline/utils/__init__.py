@@ -1,4 +1,24 @@
-"""Utility modules for the multimodal data pipeline."""
+"""Utility modules for the multimodal data pipeline.
+
+Includes domain randomization, teleoperation processing, and other
+GR00T-specific utilities for robotics data processing.
+"""
+
+try:
+    from pipeline.utils.domain_randomization import (
+        DomainRandomizationConfig,
+        DomainRandomizer,
+        apply_domain_randomization,
+    )
+    from pipeline.utils.teleoperation import (
+        TeleoperationConfig,
+        TeleoperationProcessor,
+    )
+    _DOMAIN_RANDOMIZATION_AVAILABLE = True
+    _TELEOPERATION_AVAILABLE = True
+except ImportError:
+    _DOMAIN_RANDOMIZATION_AVAILABLE = False
+    _TELEOPERATION_AVAILABLE = False
 
 from pipeline.utils.gpu.memory import (
     check_gpu_memory,
@@ -106,4 +126,18 @@ __all__ = [
     "get_writer_func",
     "list_write_formats",
 ]
+
+# Add domain randomization and teleoperation if available
+if _DOMAIN_RANDOMIZATION_AVAILABLE:
+    __all__.extend([
+        "DomainRandomizationConfig",
+        "DomainRandomizer",
+        "apply_domain_randomization",
+    ])
+
+if _TELEOPERATION_AVAILABLE:
+    __all__.extend([
+        "TeleoperationConfig",
+        "TeleoperationProcessor",
+    ])
 

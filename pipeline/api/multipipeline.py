@@ -174,7 +174,7 @@ class MultiPipelineRunner:
                 try:
                     from pipeline.utils.gpu.joins import gpu_join_operator
                     
-                    # CRITICAL: Do NOT materialize datasets with iter_batches() - breaks streaming!
+                    # Don't materialize datasets with iter_batches() - breaks streaming
                     # Ray Data's native join() is already optimized and streaming-compatible
                     # Custom GPU join would require materialization which defeats streaming purpose
                     # Use Ray Data's native join which handles streaming correctly

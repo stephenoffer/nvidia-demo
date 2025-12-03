@@ -128,7 +128,7 @@ class EpisodeBoundaryDetector(ProcessorBase):
         def filter_episodes_batch(batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
             """Filter episodes in batch by length.
             
-            CRITICAL: Keep CPU-based for streaming compatibility.
+            # Keep CPU-based for streaming compatibility
             GPU operations require DataFrame conversion which adds overhead.
             Episode filtering is fast enough on CPU and preserves streaming execution.
 
@@ -181,7 +181,7 @@ class EpisodeBoundaryDetector(ProcessorBase):
     def get_episode_statistics(self, dataset: Dataset) -> dict[str, Any]:
         """Get statistics about episodes in dataset.
 
-        CRITICAL: Use take() for sampling - it's streaming-compatible.
+        # Use take() for sampling - it's streaming-compatible
         GPU aggregation requires DataFrame conversion which adds overhead.
         Statistics collection should be lightweight and not break streaming.
 

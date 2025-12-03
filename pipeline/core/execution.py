@@ -15,6 +15,7 @@ from ray.data import Dataset
 
 from pipeline.config import PipelineConfig
 from pipeline.observability.metrics import PipelineMetrics
+from pipeline.observability.resource_monitor import StageResourceMonitor, ResourceMetricsStore
 from pipeline.utils.profiling import create_profiler, create_monitor
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,17 @@ class PipelineExecutor:
             output_dir=profile_dir, enable_profiling=enable_profiling
         )
         self.monitor = create_monitor(enabled=enable_profiling)
+        
+        # Initialize resource metrics store
+        enable_resource_monitoring = getattr(config, "enable_resource_monitoring", True)
+        metrics_dir = getattr(config, "metrics_dir", None) or "metrics"
+        metrics_path = str(Path(metrics_dir) / "resource_metrics.json")
+        self.resource_store = ResourceMetricsStore(
+            storage_path=metrics_path if enable_resource_monitoring else None,
+            max_history_per_stage=100,
+            use_compression=True,
+        )
+        self.enable_resource_monitoring = enable_resource_monitoring
 
     def execute_stages(
         self,
@@ -59,14 +71,65 @@ class PipelineExecutor:
 
         batch_count = 0
         for i, stage in enumerate(stages):
-            stage_name = stage.__class__.__name__
+            stage_name = getattr(stage, 'name', stage.__class__.__name__)
             logger.info(f"Applying stage {i + 1}/{len(stages)}: {stage_name}")
 
             try:
+                # Monitor resource utilization during stage execution
+                # Use longer sampling interval for scalability (1.0s default)
+                # Automatically detects and monitors distributed Ray workers
+                if self.enable_resource_monitoring:
+                    sampling_interval = getattr(self.config, "resource_monitoring_sampling_interval", 1.0)
+                    max_workers = getattr(self.config, "resource_monitoring_max_workers", 100)
+                    use_distributed = getattr(self.config, "resource_monitoring_use_distributed", True)
+                    
+                    resource_monitor = StageResourceMonitor(
+                        stage_name=stage_name,
+                        sampling_interval=sampling_interval,
+                        enable_gpu_monitoring=self.config.num_gpus > 0,
+                        max_workers_to_monitor=max_workers,
+                        use_distributed_monitoring=use_distributed,
+                    )
+                else:
+                    resource_monitor = None
+                
                 # Profile and monitor stage execution
-                with self.profiler.profile_stage(stage_name):
-                    with self.monitor.monitor_stage(stage_name):
-                        dataset = self._execute_stage(dataset, stage, i)
+                if resource_monitor:
+                    with self.profiler.profile_stage(stage_name):
+                        with self.monitor.monitor_stage(stage_name):
+                            with resource_monitor.monitor():
+                                dataset = self._execute_stage(dataset, stage, i)
+                    
+                    # Record resource metrics
+                    resource_metrics = resource_monitor.get_metrics()
+                    self.resource_store.record_stage_metrics(resource_metrics)
+                    
+                    # Update pipeline metrics with resource data
+                    if self.metrics.stages:
+                        current_stage = self.metrics.stages[-1]
+                        current_stage.gpu_utilization = resource_metrics.avg_gpu_utilization[0] if resource_metrics.avg_gpu_utilization else 0.0
+                        current_stage.memory_usage = resource_metrics.avg_memory_used_mb
+                        current_stage.cpu_percent = resource_metrics.avg_cpu_percent
+                        current_stage.memory_percent = resource_metrics.avg_memory_percent
+                        current_stage.resource_metrics = resource_metrics.to_dict()
+                    
+                    # Export resource metrics to Prometheus
+                    if self.metrics.prometheus_exporter:
+                        self._export_resource_metrics_to_prometheus(resource_metrics)
+                    
+                    # Log resource utilization summary
+                    logger.info(
+                        f"Stage {stage_name} resource utilization: "
+                        f"CPU={resource_metrics.avg_cpu_percent:.1f}%, "
+                        f"Memory={resource_metrics.avg_memory_percent:.1f}%, "
+                        f"GPU={[f'{u:.1f}%' for u in resource_metrics.avg_gpu_utilization] if resource_metrics.avg_gpu_utilization else 'N/A'}"
+                    )
+                else:
+                    # Resource monitoring disabled
+                    with self.profiler.profile_stage(stage_name):
+                        with self.monitor.monitor_stage(stage_name):
+                            dataset = self._execute_stage(dataset, stage, i)
+                
                 self.metrics.record_stage(stage_name)
 
                 self._perform_periodic_cleanup(i)
@@ -102,11 +165,53 @@ class PipelineExecutor:
                     )
             except Exception as e:
                 logger.warning(f"Failed to generate profiling report: {e}")
+        
+        # Save resource metrics for future analysis
+        if self.enable_resource_monitoring:
+            try:
+                self.resource_store.save()
+            except Exception as e:
+                logger.warning(f"Failed to save resource metrics: {e}")
 
         return dataset
+    
+    def _export_resource_metrics_to_prometheus(self, resource_metrics: Any) -> None:
+        """Export resource metrics to Prometheus.
+        
+        Args:
+            resource_metrics: StageResourceMetrics instance
+        """
+        if not self.metrics.prometheus_exporter:
+            return
+        
+        try:
+            from pipeline.observability.resource_monitor import StageResourceMetrics
+            
+            exporter = self.metrics.prometheus_exporter
+            
+            # Export CPU metrics
+            # Note: Prometheus exporter doesn't have CPU metrics yet, but we can add them
+            
+            # Export GPU metrics per device
+            for device_idx, gpu_util in enumerate(resource_metrics.avg_gpu_utilization):
+                gpu_mem_used = resource_metrics.avg_gpu_memory_used_mb[device_idx] * 1024 * 1024 if device_idx < len(resource_metrics.avg_gpu_memory_used_mb) else 0
+                gpu_mem_total = resource_metrics.gpu_memory_total_mb[device_idx] * 1024 * 1024 if device_idx < len(resource_metrics.gpu_memory_total_mb) else 0
+                gpu_temp = resource_metrics.avg_gpu_temperature[device_idx] if device_idx < len(resource_metrics.avg_gpu_temperature) else None
+                
+                exporter.record_gpu_metrics(
+                    device_id=device_idx,
+                    utilization=gpu_util / 100.0,  # Convert percentage to 0.0-1.0
+                    memory_used=gpu_mem_used,
+                    memory_total=gpu_mem_total,
+                    temperature=gpu_temp,
+                )
+        except Exception as e:
+            logger.debug(f"Failed to export resource metrics to Prometheus: {e}")
 
     def _execute_stage(self, dataset: Dataset, stage: Any, stage_index: int) -> Dataset:
         """Execute a single pipeline stage.
+
+        Applies per-stage resource configuration before execution.
 
         Args:
             dataset: Input dataset
@@ -116,6 +221,17 @@ class PipelineExecutor:
         Returns:
             Processed dataset
         """
+        # Log stage resource configuration
+        stage_name = getattr(stage, 'name', stage.__class__.__name__)
+        batch_size = getattr(stage, 'batch_size', 'default')
+        num_gpus = getattr(stage, 'num_gpus', 'default')
+        num_cpus = getattr(stage, 'num_cpus', 'default')
+        
+        logger.debug(
+            f"Executing stage {stage_name} with "
+            f"batch_size={batch_size}, num_gpus={num_gpus}, num_cpus={num_cpus}"
+        )
+        
         return stage.process(dataset)
 
     def _perform_periodic_cleanup(self, stage_index: int) -> None:

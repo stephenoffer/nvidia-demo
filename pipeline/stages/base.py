@@ -22,16 +22,27 @@ class PipelineStage(ABC):
     """Base class for all pipeline processing stages.
 
     Provides common functionality for batch processing, error handling,
-    and result tracking.
+    and result tracking. Supports per-stage resource allocation and automatic tuning.
     """
 
-    def __init__(self, batch_size: int = _DEFAULT_BATCH_SIZE):
+    def __init__(
+        self,
+        batch_size: Optional[int] = None,  # None = auto-tune
+        num_gpus: Optional[int] = None,  # None = inherit from pipeline
+        num_cpus: Optional[int] = None,  # None = inherit from pipeline
+        **kwargs: Any,
+    ):
         """Initialize pipeline stage.
 
         Args:
-            batch_size: Batch size for map_batches operations
+            batch_size: Batch size for map_batches operations (None = auto-tune)
+            num_gpus: Number of GPUs for this stage (None = inherit)
+            num_cpus: Number of CPUs for this stage (None = inherit)
+            **kwargs: Additional stage-specific configuration
         """
-        self.batch_size = batch_size
+        self.batch_size = batch_size if batch_size is not None else _DEFAULT_BATCH_SIZE
+        self.num_gpus = num_gpus
+        self.num_cpus = num_cpus
 
     @abstractmethod
     def process(self, dataset: Dataset) -> Dataset:

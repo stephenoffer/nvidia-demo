@@ -15,17 +15,17 @@ sources:
     max_frames: 100
   
   # Local test data (if available)
-  # Uncomment if you have local test data:
-  # - type: parquet
-  #   path: "../data/parquet/mock_data.parquet"
+  # Uncomment to use local test data:
+  - type: parquet
+    path: examples/data/parquet/mock_data.parquet
   # - type: groot
-  #   path: "../data/"
+  #   path: examples/data/
 
 # Output configuration
 output: "./output/curated"
 
 # Compute configuration
-enable_gpu: false  # Set to true if GPU available
+num_gpus: 0  # Set to > 0 if GPU available
 num_cpus: 4
 batch_size: 128
 

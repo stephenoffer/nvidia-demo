@@ -144,7 +144,7 @@ class GPUAnalyticsStage:
                 except RuntimeError as e:
                     if "out of memory" in str(e).lower() or "CUDA" in str(e):
                         logger.error(f"GPU memory error in cuDF conversion: {e}")
-                        # CRITICAL: Do NOT call rmm.reinitialize() here - it's extremely expensive!
+                        # Don't call rmm.reinitialize() here - it's expensive
                         # Instead, clear PyTorch cache and let RMM pool handle memory naturally.
                         # RMM pool should be initialized once at startup, not per-operation.
                         try:

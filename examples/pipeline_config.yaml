@@ -10,9 +10,9 @@ sources:
     max_frames: 100
 
   # Example: Local mock data (if available - auto-detected)
-  # Uncomment if you have local test data:
-  # - type: parquet
-  #   path: examples/data/parquet/mock_data.parquet
+  # Uncomment to use local test data:
+  - type: parquet
+    path: examples/data/parquet/mock_data.parquet
   # - type: numpy
   #   path: examples/data/numpy/
   # - type: text
@@ -66,9 +66,8 @@ output: examples/test_output/curated
 # Set to "cpu" to force CPU-only mode
 # Set to "gpu" to require GPU (will fail if no GPU available)
 compute_mode: auto  # "auto", "cpu", or "gpu"
-enable_gpu: true  # Will be overridden by compute_mode if set to "cpu"
-num_gpus: 4  # Will be set to 0 if compute_mode is "cpu"
-num_cpus: 32
+num_gpus: 0  # Will be set to 0 if compute_mode is "cpu", set to > 0 for GPU
+num_cpus: 4
 
 # Processing configuration
 batch_size: 1024

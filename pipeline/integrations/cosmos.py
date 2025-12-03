@@ -387,7 +387,7 @@ class CosmosDreamsLoader:
         
         scores: Dict[str, float] = {}
         
-        # Placeholder: Real implementation would compute FVD and IS
+        # Would compute FVD and IS in production
         # For now, use metadata-based heuristics
         
         # Check video properties

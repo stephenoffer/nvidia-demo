@@ -69,9 +69,9 @@ class GPUDeduplicator:
         def extract_texts_with_index(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             """Extract texts from batch and add unique index.
             
-            CRITICAL: Keep this simple and streaming-compatible.
-            GPU string operations require DataFrame conversion which adds overhead.
-            For text extraction, CPU operations are fast enough and preserve streaming.
+            Keep this simple and streaming-compatible. GPU string operations
+            require DataFrame conversion which adds overhead. For text extraction,
+            CPU operations are fast enough and preserve streaming.
             """
             # Simple CPU extraction - fast enough and streaming-compatible
             result = []
@@ -98,7 +98,7 @@ class GPUDeduplicator:
                 item["_dedup_text"] for item in batch if "_dedup_text" in item
             ]
         
-        # CRITICAL: Global deduplication requires materializing text signatures
+        # Global deduplication requires materializing text signatures
         # This breaks streaming execution but is necessary for accurate deduplication
         # Use prefetch_batches=0 to minimize memory pressure during materialization
         # For truly streaming deduplication, use per-batch deduplication instead
@@ -106,7 +106,7 @@ class GPUDeduplicator:
         max_batches_to_collect = 1000  # Limit to prevent OOM
         batch_count = 0
         for batch in indexed_dataset.iter_batches(
-            batch_size=_DEFAULT_BATCH_SIZE, prefetch_batches=0  # CRITICAL: prefetch=0 to minimize memory
+            batch_size=_DEFAULT_BATCH_SIZE, prefetch_batches=0  # prefetch=0 to minimize memory
         ):
             batch_texts = extract_texts_batch(batch)
             if batch_texts:
@@ -173,8 +173,8 @@ class GPUDeduplicator:
 
         logger.info(f"Keeping {len(keep_indices)}/{len(all_texts)} items after deduplication")
 
-        # CRITICAL: Use itertools.count for global indexing instead of mutable class
-        # This is more efficient and Ray-serialization-friendly
+        # Use itertools.count for global indexing instead of mutable class
+        # More efficient and Ray-serialization-friendly
         import itertools
         counter = itertools.count()
 

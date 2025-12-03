@@ -2,14 +2,6 @@
 
 Integrates with NVIDIA Omniverse for USD file processing, Replicator
 synthetic data generation, and simulation data export.
-Critical for GR00T: Omniverse is a key source of synthetic robotics data.
-
-CRITICAL IMPROVEMENTS:
-- Uses proper Omniverse Kit API (omni.usd) instead of pxr directly
-- Leverages GPU-accelerated USD processing
-- Proper Replicator API usage with distributed rendering
-- CUDA memory management for large scenes
-- GPU object store support for Ray Data
 """
 
 from __future__ import annotations
@@ -50,13 +42,8 @@ class OmniverseLoader:
     """Loader for NVIDIA Omniverse USD files and Replicator data.
 
     Supports loading USD scenes, Replicator-generated synthetic data,
-    and Omniverse simulation outputs.
-
-    CRITICAL IMPROVEMENTS:
-    - Uses Omniverse Kit API (omni.usd) for proper USD stage management
-    - GPU-accelerated USD processing with CUDA memory management
-    - Proper Replicator API integration
-    - GPU object store support for Ray Data
+    and Omniverse simulation outputs. Uses Omniverse Kit API for USD
+    stage management with GPU-accelerated processing.
     """
 
     def __init__(

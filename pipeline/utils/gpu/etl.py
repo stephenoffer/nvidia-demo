@@ -38,10 +38,10 @@ def gpu_map_batches_transform(
 ) -> pd.DataFrame:
     """Transform batch using GPU-accelerated cuDF operations.
 
-    CRITICAL: This function must return pandas DataFrame for Ray Data streaming compatibility.
+    This function must return pandas DataFrame for Ray Data streaming compatibility.
     cuDF DataFrames cannot be serialized by Ray and would break streaming execution.
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas" to ensure Ray Data passes pandas DataFrames:
     
     ```python
@@ -71,7 +71,7 @@ def gpu_map_batches_transform(
         logger.warning("Empty batch passed to gpu_map_batches_transform")
         return batch
 
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
@@ -85,8 +85,7 @@ def gpu_map_batches_transform(
     gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
-        # Zero-copy is faster but requires compatible dtypes
+        # Try zero-copy conversion first for performance
         # Fallback to copy if zero-copy fails
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)  # Try zero-copy first
@@ -97,17 +96,17 @@ def gpu_map_batches_transform(
         # Apply GPU transformation
         result_gdf = transform_func(gdf)
         
-        # CRITICAL: Validate result is cuDF DataFrame
+        # Validate result is cuDF DataFrame
         if result_gdf is None:
             raise RuntimeError("transform_func returned None - must return cuDF DataFrame")
         if not hasattr(result_gdf, 'to_pandas'):
             raise RuntimeError(f"transform_func must return cuDF DataFrame, got {type(result_gdf)}")
 
-        # CRITICAL: Convert back to pandas BEFORE returning
+        # Convert back to pandas before returning
         # Ray Data cannot serialize cuDF DataFrames - this breaks streaming
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -115,8 +114,8 @@ def gpu_map_batches_transform(
         del result_gdf
         del gdf
         
-        # CRITICAL: Do NOT call rmm.reinitialize() here - it's extremely expensive!
-        # RMM pool should be initialized once at application startup, not per-batch.
+        # Don't call rmm.reinitialize() here - it's expensive
+        # RMM pool should be initialized once at application startup
         # Calling reinitialize() destroys the memory pool and causes severe performance degradation.
         # The explicit del statements above are sufficient for memory cleanup.
         
@@ -128,7 +127,7 @@ def gpu_map_batches_transform(
             del result_gdf
         if gdf is not None:
             del gdf
-        # CRITICAL: CPU fallback must also validate return type
+        # CPU fallback must also validate return type
         try:
             cpu_result = transform_func(batch)
             if not isinstance(cpu_result, pd.DataFrame):
@@ -160,9 +159,9 @@ def gpu_join(
 ) -> pd.DataFrame:
     """GPU-accelerated join operation using cuDF for batch-level joins.
 
-    CRITICAL: This function operates on INDIVIDUAL BATCHES only. It does NOT perform
+    This function operates on individual batches only. It does not perform
     global joins across entire datasets. For global joins between Ray Data datasets,
-    ALWAYS use Ray Data's native join() function:
+    always use Ray Data's native join() function:
     
     ```python
     # For global joins - use Ray Data native function (CORRECT)
@@ -176,8 +175,7 @@ def gpu_join(
     # This function is only for batch-level joins within map_batches()
     ```
 
-    CRITICAL: Valid join types are "inner", "left", "right", "outer".
-    Invalid join types will cause cuDF merge() to fail.
+    Valid join types are "inner", "left", "right", "outer".
 
     Args:
         left: Left DataFrame batch
@@ -194,22 +192,22 @@ def gpu_join(
     Raises:
         ValueError: If join keys are invalid or DataFrames are empty
     """
-    # CRITICAL: Validate inputs
+    # Validate inputs
     if not isinstance(left, pd.DataFrame) or not isinstance(right, pd.DataFrame):
         raise ValueError(f"Both inputs must be pandas DataFrames, got {type(left)} and {type(right)}")
     if left.empty or right.empty:
         logger.warning("One or both DataFrames are empty, join may return empty result")
 
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate join type
+    # Validate join type
     valid_join_types = {"inner", "left", "right", "outer"}
     if how not in valid_join_types:
         raise ValueError(f"Invalid join type '{how}'. Must be one of {valid_join_types}")
 
-    # CRITICAL: Validate join keys are specified
+    # Validate join keys are specified
     if on is None and left_on is None and right_on is None:
         raise ValueError("Must specify at least one of: 'on', 'left_on'/'right_on'")
 
@@ -221,7 +219,7 @@ def gpu_join(
     right_gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             left_gdf = cudf.DataFrame.from_pandas(left, allow_copy=False)
             right_gdf = cudf.DataFrame.from_pandas(right, allow_copy=False)
@@ -230,7 +228,7 @@ def gpu_join(
             left_gdf = cudf.DataFrame.from_pandas(left, allow_copy=True)
             right_gdf = cudf.DataFrame.from_pandas(right, allow_copy=True)
 
-        # CRITICAL: Validate join keys exist in DataFrames before merge
+        # Validate join keys exist in DataFrames before merge
         if on is not None:
             if isinstance(on, str):
                 on_list = [on]
@@ -270,10 +268,10 @@ def gpu_join(
             how=how,
         )
 
-        # CRITICAL: Convert back to pandas for Ray Data compatibility
+        # Convert back to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -311,7 +309,7 @@ def gpu_aggregate(
 ) -> pd.DataFrame:
     """GPU-accelerated aggregation using cuDF.
 
-    CRITICAL: This function operates on INDIVIDUAL BATCHES only. It does NOT perform
+    This function operates on individual batches only. It does not perform
     global aggregations across the entire dataset. For global aggregations that require
     seeing all data (e.g., global groupby, global sum/min/max), use Ray Data's native
     functions instead:
@@ -329,29 +327,29 @@ def gpu_aggregate(
     )
     ```
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas".
 
     Args:
         batch: Pandas DataFrame batch (must be pandas, not cuDF)
         agg_dict: Dictionary mapping columns to aggregation functions
         groupby: Column(s) to group by (None = aggregate entire DataFrame)
-            NOTE: This only groups within the batch, not globally across the dataset
+            Note: This only groups within the batch, not globally across the dataset
         num_gpus: Number of GPUs to use
 
     Returns:
         Aggregated pandas DataFrame (ALWAYS pandas, never cuDF)
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate aggregation columns exist
+    # Validate aggregation columns exist
     missing_cols = [col for col in agg_dict.keys() if col not in batch.columns]
     if missing_cols:
         raise ValueError(f"Aggregation columns not found in DataFrame: {missing_cols}. Available: {list(batch.columns)}")
 
-    # CRITICAL: Validate groupby columns exist if specified
+    # Validate groupby columns exist if specified
     if groupby is not None:
         if isinstance(groupby, str):
             groupby_list = [groupby]
@@ -371,7 +369,7 @@ def gpu_aggregate(
     gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)
         except (ValueError, TypeError):
@@ -382,10 +380,10 @@ def gpu_aggregate(
         else:
             result_gdf = gdf.agg(agg_dict).to_frame().T
 
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -420,7 +418,7 @@ def gpu_filter(
 ) -> pd.DataFrame:
     """GPU-accelerated filtering using cuDF.
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas":
     
     ```python
@@ -439,13 +437,13 @@ def gpu_filter(
     Returns:
         Filtered DataFrame
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
     if not _CUDF_AVAILABLE or num_gpus == 0:
         # Fallback to pandas filtering
-        # CRITICAL: Validate condition function returns boolean Series/array
+        # Validate condition function returns boolean Series/array
         mask = condition(batch)
         if not hasattr(mask, '__getitem__') or not hasattr(mask, '__len__'):
             raise ValueError(f"condition function must return boolean Series/array, got {type(mask)}")
@@ -454,21 +452,21 @@ def gpu_filter(
     gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)
         except (ValueError, TypeError):
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=True)
         mask = condition(gdf)
-        # CRITICAL: Validate mask is boolean Series/array
+        # Validate mask is boolean Series/array
         if not hasattr(mask, '__getitem__') or not hasattr(mask, '__len__'):
             raise ValueError(f"condition function must return boolean Series/array, got {type(mask)}")
         result_gdf = gdf[mask]
         
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -502,7 +500,7 @@ def gpu_sort(
 ) -> pd.DataFrame:
     """GPU-accelerated sorting using cuDF.
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas":
     
     ```python
@@ -522,11 +520,11 @@ def gpu_sort(
     Returns:
         Sorted DataFrame
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate sort columns exist
+    # Validate sort columns exist
     if isinstance(by, str):
         by_list = [by]
     else:
@@ -541,17 +539,17 @@ def gpu_sort(
     gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)
         except (ValueError, TypeError):
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=True)
         result_gdf = gdf.sort_values(by=by, ascending=ascending)
         
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -597,13 +595,13 @@ def gpu_string_operations(
     Returns:
         DataFrame with transformed string column
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
     if not _CUDF_AVAILABLE or num_gpus == 0:
         # Fallback to pandas string operations
-        # CRITICAL: Validate column exists
+        # Validate column exists
         if column not in batch.columns:
             raise ValueError(f"Column '{column}' not found in DataFrame. Available columns: {list(batch.columns)}")
         result = batch.copy()
@@ -621,16 +619,16 @@ def gpu_string_operations(
             raise ValueError(f"Invalid operation '{operation}'. Must be one of: lower, upper, strip, replace, contains")
         return result
 
-    # CRITICAL: Validate column exists before processing
+    # Validate column exists before processing
     if column not in batch.columns:
         raise ValueError(f"Column '{column}' not found in DataFrame. Available columns: {list(batch.columns)}")
 
-    # CRITICAL: Validate operation type
+    # Validate operation type
     valid_operations = {"lower", "upper", "strip", "replace", "contains"}
     if operation not in valid_operations:
         raise ValueError(f"Invalid operation '{operation}'. Must be one of: {valid_operations}")
 
-    # CRITICAL: Validate operation-specific parameters
+    # Validate operation-specific parameters
     if operation in {"replace", "contains"} and pattern is None:
         raise ValueError(f"Operation '{operation}' requires 'pattern' parameter")
 
@@ -639,7 +637,7 @@ def gpu_string_operations(
 
     gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)
         except (ValueError, TypeError):
@@ -655,10 +653,10 @@ def gpu_string_operations(
         elif operation == "contains" and pattern:
             gdf[column] = gdf[column].str.contains(pattern)
         
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -712,20 +710,20 @@ def gpu_window_function(
     Returns:
         DataFrame with window function applied
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate column exists
+    # Validate column exists
     if column not in batch.columns:
         raise ValueError(f"Column '{column}' not found in DataFrame. Available columns: {list(batch.columns)}")
 
-    # CRITICAL: Validate window function
+    # Validate window function
     valid_window_funcs = {"sum", "mean", "max", "min", "rank", "row_number"}
     if window_func not in valid_window_funcs:
         raise ValueError(f"Invalid window function '{window_func}'. Must be one of: {valid_window_funcs}")
 
-    # CRITICAL: Validate partition_by columns exist if specified
+    # Validate partition_by columns exist if specified
     if partition_by is not None:
         if isinstance(partition_by, str):
             partition_list = [partition_by]
@@ -735,7 +733,7 @@ def gpu_window_function(
         if missing_cols:
             raise ValueError(f"Partition columns not found: {missing_cols}. Available: {list(batch.columns)}")
 
-    # CRITICAL: Validate order_by columns exist if specified
+    # Validate order_by columns exist if specified
     if order_by is not None:
         if isinstance(order_by, str):
             order_list = [order_by]
@@ -764,7 +762,7 @@ def gpu_window_function(
 
     gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)
         except (ValueError, TypeError):
@@ -782,10 +780,10 @@ def gpu_window_function(
             elif window_func == "min":
                 gdf[f"{column}_{window_func}"] = grouped[column].transform("min")
         
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -835,11 +833,11 @@ def gpu_drop_duplicates(
     Returns:
         DataFrame with duplicates removed
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate subset columns exist if specified
+    # Validate subset columns exist if specified
     if subset is not None:
         if isinstance(subset, str):
             subset_list = [subset]
@@ -849,7 +847,7 @@ def gpu_drop_duplicates(
         if missing_cols:
             raise ValueError(f"Subset columns not found in DataFrame: {missing_cols}. Available: {list(batch.columns)}")
 
-    # CRITICAL: Validate keep parameter
+    # Validate keep parameter
     valid_keep_values = {"first", "last", False}
     if keep not in valid_keep_values:
         raise ValueError(f"Invalid keep value '{keep}'. Must be one of: {valid_keep_values}")
@@ -860,17 +858,17 @@ def gpu_drop_duplicates(
     gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)
         except (ValueError, TypeError):
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=True)
         result_gdf = gdf.drop_duplicates(subset=subset, keep=keep)
         
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -912,11 +910,11 @@ def gpu_fillna(
     Returns:
         DataFrame with NaN values filled
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate fillna parameters
+    # Validate fillna parameters
     if method is not None and value is not None:
         raise ValueError("Cannot specify both 'method' and 'value' for fillna")
     if method is not None:
@@ -933,12 +931,12 @@ def gpu_fillna(
     gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)
         except (ValueError, TypeError):
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=True)
-        # CRITICAL: cuDF fillna with method parameter may not support all pandas methods
+        # cuDF fillna with method parameter may not support all pandas methods
         # Validate and use appropriate cuDF API
         if method:
             # cuDF supports 'ffill' and 'bfill' methods
@@ -951,10 +949,10 @@ def gpu_fillna(
         else:
             result_gdf = gdf.fillna(value=value)
         
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -1001,11 +999,11 @@ def gpu_pivot(
     Returns:
         Pivoted DataFrame
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate pivot columns exist
+    # Validate pivot columns exist
     if isinstance(index, str):
         index_list = [index]
     else:
@@ -1024,17 +1022,17 @@ def gpu_pivot(
     gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=False)
         except (ValueError, TypeError):
             gdf = cudf.DataFrame.from_pandas(batch, allow_copy=True)
         result_gdf = gdf.pivot_table(index=index, columns=columns, values=values)
         
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         
@@ -1077,18 +1075,18 @@ def gpu_concat(
     Raises:
         ValueError: If batches list is empty or contains invalid DataFrames
     """
-    # CRITICAL: Validate input
+    # Validate input
     if not batches:
         raise ValueError("Cannot concatenate empty list of batches")
     if not all(isinstance(b, pd.DataFrame) for b in batches):
         invalid_types = [type(b).__name__ for b in batches if not isinstance(b, pd.DataFrame)]
         raise ValueError(f"All batches must be pandas DataFrames, found: {invalid_types}")
 
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate axis parameter
+    # Validate axis parameter
     if axis not in {0, 1}:
         raise ValueError(f"axis must be 0 (rows) or 1 (columns), got {axis}")
 
@@ -1098,7 +1096,7 @@ def gpu_concat(
     gdfs = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         gdfs = []
         for batch in batches:
             try:
@@ -1106,7 +1104,7 @@ def gpu_concat(
             except (ValueError, TypeError):
                 gdf = cudf.DataFrame.from_pandas(batch, allow_copy=True)
             gdfs.append(gdf)
-        # CRITICAL: cuDF concat may fail if DataFrames have incompatible schemas
+        # cuDF concat may fail if DataFrames have incompatible schemas
         # Validate schema compatibility before concatenation
         if len(gdfs) > 1:
             # Check column compatibility for axis=0 (row concatenation)
@@ -1129,10 +1127,10 @@ def gpu_concat(
                         )
         result_gdf = cudf.concat(gdfs, axis=axis)
         
-        # CRITICAL: Convert to pandas for Ray Data compatibility
+        # Convert to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         

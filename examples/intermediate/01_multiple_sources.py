@@ -51,10 +51,10 @@ if __name__ == "__main__":
         logger.info("To add local test data, run: python examples/create_mock_data.py")
     
     # Create pipeline with multiple sources
-    pipeline = Pipeline(
+    pipeline = Pipeline.create(
         sources=sources,
         output="./output/curated",
-        enable_gpu=False,  # Set to True if GPU available
+        num_gpus=0,  # Set to > 0 if GPU available
         num_cpus=4,
         batch_size=128,
         streaming=True,

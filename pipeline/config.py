@@ -46,6 +46,13 @@ class PipelineConfig:
     input_paths: List[str]
     output_path: str
     enable_gpu_dedup: bool = True
+    
+    # GR00T-specific configurations
+    enable_domain_randomization: bool = False
+    num_randomized_environments: int = 10000
+    enable_teleoperation_processing: bool = False
+    enable_high_throughput_simulation: bool = False
+    target_simulation_speedup: float = 10000.0
     num_gpus: int = _DEFAULT_GPUS
     num_cpus: Optional[int] = None
     batch_size: Optional[int] = None
@@ -62,6 +69,13 @@ class PipelineConfig:
     compute_mode: str = _DEFAULT_COMPUTE_MODE  # "auto", "cpu", "gpu"
     random_seed: Optional[int] = None  # Random seed for reproducibility
     enable_lineage_tracking: bool = True  # Enable data lineage tracking
+    
+    # Resource monitoring configuration
+    enable_resource_monitoring: bool = True  # Enable psutil-based resource monitoring
+    resource_monitoring_sampling_interval: float = 1.0  # Sampling interval in seconds (longer = less overhead)
+    resource_monitoring_max_workers: int = 100  # Maximum workers to monitor (for scalability)
+    resource_monitoring_use_distributed: bool = True  # Use Ray distributed monitoring
+    metrics_dir: Optional[str] = None  # Directory for metrics storage (None = "metrics")
 
     # Video processing config - uses defaults factory for repeatability
     video_config: Dict[str, Any] = field(default_factory=get_default_video_config)

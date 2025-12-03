@@ -26,7 +26,7 @@ if __name__ == "__main__":
     builder = PipelineBuilder()
     
     # Add public S3 video (always available)
-    builder.add_source(
+    builder.source(
         "video",
         "s3://anonymous@ray-example-data/basketball.mp4",
         extract_frames=True,
@@ -38,20 +38,20 @@ if __name__ == "__main__":
     test_parquet = data_dir / "parquet" / "mock_data.parquet"
     if test_parquet.exists():
         logger.info(f"Adding local test data: {test_parquet}")
-        builder.add_source("parquet", str(test_parquet))
+        builder.source("parquet", str(test_parquet))
     
     test_jsonl = data_dir / "test_groot.jsonl"
     if test_jsonl.exists():
         logger.info(f"Adding local JSONL data: {test_jsonl}")
-        builder.add_source("groot", str(data_dir))
+        builder.source("groot", str(data_dir))
     
     # Add data quality stages
-    builder.add_profiler(
+    builder.profile(
         profile_columns=["image", "frame_id"],
         use_gpu=False,  # Set to True if GPU available
     )
     
-    builder.add_validator(
+    builder.validate(
         expected_schema={
             "frame_id": int,
             "image": list,
@@ -60,12 +60,12 @@ if __name__ == "__main__":
     )
     
     # Configure compute
-    builder.enable_gpu(num_gpus=0)  # Set to > 0 if GPU available
-    builder.set_batch_size(128)
+    builder.gpu(num_gpus=0)  # Set to > 0 if GPU available
+    builder.batch(128)
     
     # Configure execution
-    builder.set_streaming(True)
-    builder.set_output("./output/curated")
+    builder.streaming(True)
+    builder.output("./output/curated")
     
     # Build pipeline
     pipeline = builder.build()

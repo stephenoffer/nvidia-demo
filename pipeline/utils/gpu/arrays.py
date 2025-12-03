@@ -40,7 +40,7 @@ def gpu_array_stats(
     Returns:
         Dictionary with statistics (mean, std, min, max, median)
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise GPUError(f"num_gpus must be >= 0, got {num_gpus}")
 
@@ -113,7 +113,7 @@ def gpu_normalize(
     Returns:
         Normalized array (same type as input)
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise GPUError(f"num_gpus must be >= 0, got {num_gpus}")
 
@@ -199,7 +199,7 @@ def gpu_remove_outliers(
     Returns:
         Array with outliers removed
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise GPUError(f"num_gpus must be >= 0, got {num_gpus}")
 

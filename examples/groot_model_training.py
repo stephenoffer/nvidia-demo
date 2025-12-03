@@ -20,9 +20,9 @@ The GR00T N1 model architecture (based on NVIDIA specifications):
 
 Following NVIDIA's "data maximalist, model minimalist" approach:
 - Complex data pipelines combining:
-  - Fossil Fuel: Internet-scale web data and human videos
-  - Nuclear Fuel: Synthetic data from Simulation 1.0 (Isaac Lab) and Simulation 2.0 (Cosmos Dreams)
-  - Human Fuel: Real robot data from teleoperation (4-24 hours per robot per day)
+  - Internet-scale data: Web data and human videos
+  - Synthetic data: Simulation data from Simulation 1.0 (Isaac Lab) and Simulation 2.0 (Cosmos Dreams)
+  - Teleoperation data: Real robot data from teleoperation (4-24 hours per robot per day)
 - Clean model architecture that compresses trillions of tokens from data pipeline
 
 Training on Ray infrastructure:
@@ -54,16 +54,16 @@ def main() -> None:
 
     # Step 1: Run data curation pipeline (if not already done)
     # Following GR00T's data pyramid approach:
-    # - Base Layer (Fossil Fuel): Internet-scale web data and human videos
-    # - Middle Layer (Nuclear Fuel): Synthetic data from Simulation 1.0 and 2.0
-    # - Top Layer (Human Fuel): Real robot data from teleoperation
+    # - Base Layer: Internet-scale web data and human videos
+    # - Middle Layer: Synthetic data from Simulation 1.0 and 2.0
+    # - Top Layer: Real robot data from teleoperation
     logger.info("Step 1: Running GR00T data curation pipeline...")
 
     config = PipelineConfig(
         input_paths=[
-            "s3://bucket/teleop_data/",  # Human Fuel: Real robot teleoperation (4-24 hrs/robot/day)
-            "s3://bucket/internet_videos/",  # Fossil Fuel: Internet-scale video (100M+ clips)
-            "s3://bucket/text_corpus/",  # Fossil Fuel: Text data for pretraining
+            "s3://bucket/teleop_data/",  # Teleoperation data: Real robot teleoperation (4-24 hrs/robot/day)
+            "s3://bucket/internet_videos/",  # Internet-scale data: Internet-scale video (100M+ clips)
+            "s3://bucket/text_corpus/",  # Internet-scale data: Text data for pretraining
         ],
         output_path="s3://bucket/groot_curated/",
         enable_gpu_dedup=True,
@@ -79,11 +79,15 @@ def main() -> None:
     # - One-to-one replicas of robots and worlds
     # - 10,000x faster than real-time on GPU
     # - Domain randomization for sim-to-real transfer
+    # - Supports 10,000+ parallel environments
     isaac_loader = IsaacLabLoader(
         simulation_path="/path/to/isaac/lab/trajectories",
         robot_type="humanoid",
         include_observations=True,
         include_actions=True,
+        enable_domain_randomization=True,
+        num_parallel_environments=4096,
+        use_gpu=True,
     )
     pipeline.add_simulation_data(isaac_loader)
 

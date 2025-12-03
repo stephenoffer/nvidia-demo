@@ -110,6 +110,23 @@ class PrometheusMetricsExporter:
             ["device_id"],
         )
         
+        # CPU and memory metrics per stage
+        self.stage_cpu_percent = Gauge(
+            "pipeline_stage_cpu_percent",
+            "Stage CPU utilization percentage",
+            ["stage"],
+        )
+        self.stage_memory_percent = Gauge(
+            "pipeline_stage_memory_percent",
+            "Stage memory utilization percentage",
+            ["stage"],
+        )
+        self.stage_memory_used_mb = Gauge(
+            "pipeline_stage_memory_used_mb",
+            "Stage memory used in MB",
+            ["stage"],
+        )
+        
         # Pipeline metrics
         self.pipeline_total_samples = Gauge(
             "pipeline_total_samples",
@@ -188,6 +205,9 @@ class PrometheusMetricsExporter:
         items_processed: int,
         items_filtered: int = 0,
         errors: int = 0,
+        cpu_percent: Optional[float] = None,
+        memory_percent: Optional[float] = None,
+        memory_used_mb: Optional[float] = None,
     ) -> None:
         """Record metrics for a pipeline stage.
 
@@ -197,6 +217,9 @@ class PrometheusMetricsExporter:
             items_processed: Number of items processed
             items_filtered: Number of items filtered
             errors: Number of errors
+            cpu_percent: CPU utilization percentage (optional)
+            memory_percent: Memory utilization percentage (optional)
+            memory_used_mb: Memory used in MB (optional)
         """
         if not self.enabled:
             return
@@ -216,6 +239,14 @@ class PrometheusMetricsExporter:
         # Throughput gauge
         throughput = items_processed / duration if duration > 0 else 0.0
         self.stage_throughput.labels(*labels).set(throughput)
+        
+        # Resource metrics
+        if cpu_percent is not None:
+            self.stage_cpu_percent.labels(*labels).set(cpu_percent)
+        if memory_percent is not None:
+            self.stage_memory_percent.labels(*labels).set(memory_percent)
+        if memory_used_mb is not None:
+            self.stage_memory_used_mb.labels(*labels).set(memory_used_mb)
 
     def record_gpu_metrics(
         self,

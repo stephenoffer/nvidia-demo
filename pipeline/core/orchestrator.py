@@ -6,6 +6,7 @@ Coordinates data loading, stage execution, and output generation.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional
 
@@ -94,12 +95,17 @@ class MultimodalPipeline:
         self.visualization = PipelineVisualizationManager()
 
         self.stages: list[PipelineStage] = []
+        self.stage_configs: dict[str, Any] = {}  # Per-stage resource configurations
         self._setup_default_stages()
+        self._apply_stage_resource_tuning()
+        
+        # Load historical resource metrics for informed tuning
+        self._load_resource_metrics_history()
 
         self.simulation_loaders: list[IsaacLabLoader] = []
         self.synthetic_loaders: list[CosmosDreamsLoader] = []
-        self.omniverse_loaders: list[Any] = []  # TODO: Create OmniverseLoader type
-        self.synthetic_generators: list[Any] = []  # TODO: Create SyntheticGenerator type
+        self.omniverse_loaders: list[Any] = []
+        self.synthetic_generators: list[Any] = []
 
     def _configure_ray_data(self, config: PipelineConfig) -> None:
         """Configure Ray Data execution options.
@@ -160,11 +166,105 @@ class MultimodalPipeline:
                 )
             )
 
-    def add_stage(self, stage: PipelineStage) -> "MultimodalPipeline":
+    def _apply_stage_resource_tuning(self) -> None:
+        """Apply automatic resource tuning to all stages."""
+        try:
+            from pipeline.config.stage_config import StageResourceTuner, StageConfig, StageResourceConfig
+            
+            # Initialize tuner with pipeline resources
+            tuner = StageResourceTuner(
+                total_gpus=self.config.num_gpus,
+                total_cpus=self.config.num_cpus,
+            )
+            
+            # Tune each stage
+            for stage in self.stages:
+                stage_name = getattr(stage, 'name', stage.__class__.__name__)
+                stage_class = stage.__class__.__name__
+                
+                # Create stage config from existing stage
+                stage_config = StageConfig(
+                    stage_name=stage_name,
+                    stage_class=stage_class,
+                    stage_kwargs={},
+                    resources=StageResourceConfig(
+                        batch_size=getattr(stage, 'batch_size', None),
+                        num_gpus=getattr(stage, 'num_gpus', None),
+                        num_cpus=getattr(stage, 'num_cpus', None),
+                        auto_tune=True,
+                    ),
+                )
+                
+                # Tune resources
+                tuned_resources = tuner.tune_stage(
+                    stage_config,
+                    pipeline_batch_size=self.config.batch_size,
+                    pipeline_num_gpus=self.config.num_gpus,
+                    pipeline_num_cpus=self.config.num_cpus,
+                )
+                
+                # Apply tuned resources to stage
+                if tuned_resources.batch_size is not None:
+                    stage.batch_size = tuned_resources.batch_size
+                if tuned_resources.num_gpus is not None:
+                    stage.num_gpus = tuned_resources.num_gpus
+                if tuned_resources.num_cpus is not None:
+                    stage.num_cpus = tuned_resources.num_cpus
+                
+                # Store config for reference
+                self.stage_configs[stage_name] = tuned_resources
+                
+                logger.debug(
+                    f"Tuned stage {stage_name}: "
+                    f"batch_size={tuned_resources.batch_size}, "
+                    f"num_gpus={tuned_resources.num_gpus}, "
+                    f"num_cpus={tuned_resources.num_cpus}"
+                )
+        except ImportError as e:
+            logger.warning(f"Stage resource tuning not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to apply stage resource tuning: {e}")
+    
+    def _load_resource_metrics_history(self) -> None:
+        """Load historical resource metrics to inform configuration decisions."""
+        try:
+            from pipeline.observability.resource_monitor import ResourceMetricsStore
+            
+            metrics_dir = getattr(self.config, "metrics_dir", "metrics")
+            metrics_path = str(Path(metrics_dir) / "resource_metrics.json")
+            
+            store = ResourceMetricsStore(storage_path=metrics_path)
+            store.load()
+            
+            # Use historical metrics to improve tuning
+            for stage_name in store.metrics_history.keys():
+                avg_metrics = store.get_stage_averages(stage_name)
+                if avg_metrics:
+                    logger.debug(
+                        f"Historical metrics for {stage_name}: "
+                        f"CPU={avg_metrics.get('avg_cpu_percent', 0):.1f}%, "
+                        f"Memory={avg_metrics.get('avg_memory_percent', 0):.1f}%, "
+                        f"GPU={avg_metrics.get('avg_gpu_utilization', [])}"
+                    )
+        except Exception as e:
+            logger.debug(f"Could not load resource metrics history: {e}")
+
+    def add_stage(
+        self,
+        stage: PipelineStage,
+        batch_size: Optional[int] = None,
+        num_gpus: Optional[int] = None,
+        num_cpus: Optional[int] = None,
+        auto_tune: bool = True,
+    ) -> "MultimodalPipeline":
         """Add a custom processing stage to the pipeline.
 
         Args:
             stage: Processing stage instance
+            batch_size: Batch size for this stage (None = auto-tune)
+            num_gpus: GPUs for this stage (None = inherit or auto-tune)
+            num_cpus: CPUs for this stage (None = inherit or auto-tune)
+            auto_tune: Enable automatic resource tuning for this stage
             
         Returns:
             Self for method chaining
@@ -235,7 +335,7 @@ class MultimodalPipeline:
         logger.info(f"Added Cosmos Dreams synthetic data loader: {loader.model_name}")
         return self
 
-    def add_omniverse_data(self, loader: Any) -> None:  # TODO: Create OmniverseLoader type
+    def add_omniverse_data(self, loader: Any) -> None:
         """Add Omniverse USD/Replicator data loader.
 
         Args:
@@ -249,7 +349,7 @@ class MultimodalPipeline:
         self.omniverse_loaders.append(loader)
         logger.info(f"Added Omniverse data loader: {loader.omniverse_path}")
 
-    def add_synthetic_generator(self, generator: Any) -> None:  # TODO: Create SyntheticGenerator type
+    def add_synthetic_generator(self, generator: Any) -> None:
         """Add a synthetic data generator.
 
         Args:

@@ -1,17 +1,7 @@
 """Integration with NVIDIA NeMo for text embeddings and language models.
 
-NVIDIA NeMo is a framework for building, training, and fine-tuning large
-language models and multimodal foundation models. This integration provides
-high-quality text embeddings for semantic deduplication and data curation.
-
-CRITICAL IMPROVEMENTS:
-- Uses actual NeMo TextEmbeddingModel API when available
-- Proper GPU memory management for NeMo models
-- Batch processing with CUDA optimization
-- GPU object store support for Ray Data
-- Proper model loading and caching
-
-See: https://docs.nvidia.com/nemo-framework/user-guide/latest/
+Provides high-quality text embeddings for semantic deduplication and data curation.
+Uses NeMo TextEmbeddingModel API when available with GPU-accelerated batch processing.
 """
 
 from __future__ import annotations

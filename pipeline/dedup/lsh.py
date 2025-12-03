@@ -49,8 +49,7 @@ class LSHGPUWorker:
 
         if torch.cuda.is_available():
             try:
-                # CRITICAL: Ray manages GPU assignment via num_gpus in @ray.remote decorator
-                # CUDA_VISIBLE_DEVICES is set by Ray to limit visible devices per actor
+                # Ray manages GPU assignment via num_gpus in @ray.remote decorator
                 # When Ray sets CUDA_VISIBLE_DEVICES="0", device 0 in the actor's view is actually
                 # the GPU assigned by Ray. We should use device 0 (the first visible device).
                 # Do NOT parse CUDA_VISIBLE_DEVICES - Ray handles device assignment.
@@ -58,8 +57,7 @@ class LSHGPUWorker:
                 device_id = get_cuda_device(device_id)  # Validate device is available
                 
                 self.device = torch.device(f"cuda:{device_id}")
-                # CRITICAL: Device is already set by get_cuda_device() above
-                # Verify device is correct
+                # Device is already set by get_cuda_device() above
                 if torch.cuda.current_device() != device_id:
                     torch.cuda.set_device(device_id)
                 logger.info(f"LSH worker using CUDA device {device_id}: {torch.cuda.get_device_name(device_id)}")
@@ -186,15 +184,13 @@ class LSHGPUWorker:
         if len(signatures) == 0:
             return set()
 
-        # CRITICAL: Ensure signatures are on correct device before operations
-        # Use non-blocking transfer for performance, but synchronize after
+        # Ensure signatures are on correct device
         if not signatures.is_cuda and self.device.type == "cuda":
             signatures = signatures.to(self.device, non_blocking=True)
         elif signatures.device != self.device:
             signatures = signatures.to(self.device, non_blocking=True)
 
-        # CRITICAL: Synchronize after non-blocking transfer to ensure completion
-        # Then check for CUDA errors before proceeding
+        # Synchronize after transfer to ensure completion
         if self.device.type == "cuda":
             torch.cuda.synchronize()
             # Check for CUDA errors after synchronization
@@ -225,8 +221,7 @@ class LSHGPUWorker:
                     # Move to CPU once for all matches
                     match_indices = torch.where(matches)[0].cpu().numpy()
 
-                    # CRITICAL: Batch CPU operations to avoid repeated GPU-CPU sync
-                    # Move all needed signatures to CPU at once, not per-iteration
+                    # Batch CPU operations to avoid repeated GPU-CPU sync
                     if len(match_indices) > 0:
                         # Move signatures[i] to CPU once
                         sig_i_cpu = signatures[i].cpu().numpy()
@@ -361,15 +356,14 @@ class LSHDeduplicator:
 
         with gpu_memory_cleanup():
             if all_signatures:
-                # CRITICAL: Concatenate on GPU if first signature is on GPU
-                # Determine target device from first signature
+                # Concatenate on GPU if first signature is on GPU
                 device = all_signatures[0].device if all_signatures else torch.device("cpu")
                 # Concatenate all signatures (may involve device transfers)
                 combined_signatures = torch.cat(all_signatures, dim=0)
                 # Move to target device if needed (non-blocking for performance)
                 if combined_signatures.device != device:
                     combined_signatures = combined_signatures.to(device, non_blocking=True)
-                # CRITICAL: Synchronize after concatenation and transfer
+                # Synchronize after concatenation
                 if device.type == "cuda":
                     torch.cuda.synchronize()
                     # Check for CUDA errors after synchronization

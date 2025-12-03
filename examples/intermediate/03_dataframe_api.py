@@ -5,34 +5,34 @@ Shows standard Python built-ins, operators, and indexing.
 """
 
 import ray
-from pipeline.api import PipelineDataFrame
+from pathlib import Path
+from pipeline.api import read, PipelineDataFrame
 
 if __name__ == "__main__":
     # Initialize Ray
     ray.init(ignore_reinit_error=True)
     
     try:
-        # Create DataFrame from public S3 video
-        # Note: For video data, we'll process it first
-        print("Creating DataFrame from public S3 video...")
+        # Try to load from local parquet file first, otherwise create test data
+        data_dir = Path(__file__).parent.parent / "data"
+        parquet_file = data_dir / "parquet" / "mock_data.parquet"
         
-        # Create DataFrame from public S3 video
-        # Note: For video data, we process it first, then demonstrate DataFrame features
-        # In practice, you'd load from processed video frames or other data sources
-        
-        # For demonstration, create a simple DataFrame simulating processed video frames
-        # This represents what you'd get after processing the public S3 video
-        print("Simulating processed video frames from public S3 video...")
-        test_data = [
-            {
-                "frame_id": i,
-                "timestamp": i * 0.033,  # 30 FPS
-                "source": "s3://anonymous@ray-example-data/basketball.mp4",
-                "image": [0.5] * 224 * 224 * 3,  # Simulated image data
-            }
-            for i in range(100)
-        ]
-        df = PipelineDataFrame.from_dataset(ray.data.from_items(test_data))
+        if parquet_file.exists():
+            print(f"Loading DataFrame from local test data: {parquet_file}")
+            df = read(str(parquet_file))
+        else:
+            # Fallback: Create test data from scratch
+            print("Creating DataFrame from test data...")
+            test_data = [
+                {
+                    "id": i,
+                    "text": f"Sample text {i}",
+                    "value": float(i * 1.5),
+                    "category": f"cat_{i % 10}",
+                }
+                for i in range(100)
+            ]
+            df = PipelineDataFrame.from_dataset(ray.data.from_items(test_data))
         
         print("\n" + "=" * 60)
         print("DataFrame Pythonic Features")

@@ -10,9 +10,9 @@ def example_wandb_basic():
     """Basic W&B integration example."""
     pipeline = (
         PipelineBuilder()
-        .add_source("video", "s3://bucket/videos/")
-        .add_profiler(profile_columns=["image"], use_gpu=True)
-        .set_output("s3://bucket/output/")
+        .source("video", "s3://bucket/videos/")
+        .profile(profile_columns=["image"], use_gpu=True)
+        .output("s3://bucket/output/")
         .build()
     )
     
@@ -38,7 +38,7 @@ def example_wandb_context_manager():
             PipelineBuilder()
             .add_source("video", "s3://bucket/videos/")
             .add_profiler(profile_columns=["image"], use_gpu=True)
-            .add_inference(model_uri="models:/groot-model/Production")
+            .infer(model_uri="models:/groot-model/Production")
             .set_output("s3://bucket/output/")
             .build()
         )
@@ -58,7 +58,7 @@ def example_both_mlflow_and_wandb():
             PipelineBuilder()
             .add_source("video", "s3://bucket/videos/")
             .add_profiler(profile_columns=["image"], use_gpu=True)
-            .add_inference(model_uri="models:/groot-model/Production")
+            .infer(model_uri="models:/groot-model/Production")
             .set_output("s3://bucket/output/")
             .build()
         )
@@ -73,8 +73,8 @@ def example_wandb_with_pipeline_instance():
         output="s3://bucket/output/",
     )
     
-    pipeline.add_profiler(profile_columns=["image"], use_gpu=True)
-    pipeline.add_inference(model_uri="models:/groot-model/Production")
+    pipeline.profile(profile_columns=["image"], use_gpu=True)
+    pipeline.infer(model_uri="models:/groot-model/Production")
     
     # Run with W&B tracking
     results = pipeline.run(
@@ -91,8 +91,8 @@ def example_auto_detect():
     with experiment("groot_training_auto", tags={"model": "groot"}):
         pipeline = (
             PipelineBuilder()
-            .add_source("video", "s3://bucket/videos/")
-            .set_output("s3://bucket/output/")
+            .source("video", "s3://bucket/videos/")
+            .output("s3://bucket/output/")
             .build()
         )
         

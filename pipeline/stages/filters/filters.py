@@ -47,7 +47,7 @@ class QualityFilter:
         """
         logger.info(f"Applying {len(self.filters)} quality filters")
 
-        # CRITICAL: Use Ray Data's native filter() - it's streaming-compatible and optimized
+        # Use Ray Data's native filter() - it's streaming-compatible and optimized
         # GPU filtering requires DataFrame conversion which adds overhead
         # Ray Data's filter() is already efficient and preserves streaming execution
         filtered = dataset

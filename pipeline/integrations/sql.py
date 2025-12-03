@@ -117,7 +117,7 @@ class SQLDataLoader:
                             f"maximum {self.max_result_size} bytes"
                         )
                 
-                # CRITICAL: Do NOT use cuDF here - SQL loader reads entire dataset into memory
+                # Don't use cuDF here - SQL loader reads entire dataset into memory
                 # Converting to cuDF and back provides no benefit and wastes GPU memory
                 # Ray Data will handle GPU acceleration during map_batches operations
                 # Keep pandas DataFrame for Ray Data compatibility

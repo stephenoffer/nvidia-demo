@@ -4,13 +4,13 @@ Shows how to use the PipelineDataFrame API inspired by Ray Data, Spark,
 Polars, and Pandas for building data pipelines.
 """
 
-from pipeline.api import PipelineDataFrame
+from pipeline.api import read
 
 
 def example_basic_operations():
     """Basic DataFrame operations with Pythonic features."""
     # Create DataFrame from paths
-    df = PipelineDataFrame.from_paths(["s3://bucket/data/parquet/"])
+    df = read("s3://bucket/data/parquet/")
     
     # Use standard Python built-ins
     print(f"Number of rows: {len(df)}")  # len() support
@@ -69,8 +69,8 @@ def example_groupby_aggregations():
 
 def example_joins():
     """Join operations."""
-    df1 = PipelineDataFrame.from_paths(["s3://bucket/episodes/"])
-    df2 = PipelineDataFrame.from_paths(["s3://bucket/metadata/"])
+    df1 = read("s3://bucket/episodes/")
+    df2 = read("s3://bucket/metadata/")
     
     # Inner join
     joined = df1.join(df2, on="episode_id", how="inner")
@@ -151,9 +151,9 @@ def example_distinct_and_sort():
 
 def example_union():
     """Union multiple DataFrames with operator overloading."""
-    df1 = PipelineDataFrame.from_paths(["s3://bucket/data1/"])
-    df2 = PipelineDataFrame.from_paths(["s3://bucket/data2/"])
-    df3 = PipelineDataFrame.from_paths(["s3://bucket/data3/"])
+    df1 = read("s3://bucket/data1/")
+    df2 = read("s3://bucket/data2/")
+    df3 = read("s3://bucket/data3/")
     
     # Union using operator overloading (like pd.concat)
     combined = df1 + df2 + df3  # Using + operator
@@ -178,10 +178,10 @@ def example_write_output():
     )
     
     # Write to Parquet
-    processed.write_parquet("s3://bucket/output/parquet/")
+    processed.to_parquet("s3://bucket/output/parquet/")
     
     # Write to JSON
-    processed.write_json("s3://bucket/output/json/")
+    processed.to_json("s3://bucket/output/json/")
 
 
 def example_repartitioning():

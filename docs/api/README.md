@@ -34,22 +34,22 @@ results = pipeline.run()
 The `Pipeline` class supports standard Python built-ins and operators:
 
 ```python
-from pipeline.api import Pipeline
+from pipeline.api import pipeline
 
-pipeline1 = Pipeline.quick_start(input_paths="s3://bucket/data1/", output_path="s3://output/")
-pipeline2 = Pipeline.quick_start(input_paths="s3://bucket/data2/", output_path="s3://output/")
+p1 = pipeline(sources="s3://bucket/data1/", output="s3://output/")
+p2 = pipeline(sources="s3://bucket/data2/", output="s3://output/")
 
 # Standard Python built-ins
-print(f"Number of sources: {len(pipeline1)}")  # len() support
-for source in pipeline1:  # Iteration
+print(f"Number of sources: {len(p1)}")  # len() support
+for source in p1:  # Iteration
     print(source)
-if pipeline1:  # Boolean check
+if p1:  # Boolean check
     print("Pipeline is configured")
-if "s3://bucket/data1/" in pipeline1:  # Membership check
+if "s3://bucket/data1/" in p1:  # Membership check
     print("Source found")
 
 # Operator overloading
-combined = pipeline1 + pipeline2  # Combine sources
+combined = p1 + p2  # Combine sources
 ```
 
 ## DataFrame API
@@ -61,10 +61,10 @@ A Pythonic DataFrame API inspired by Spark, Polars, and Pandas, with full suppor
 #### Basic Usage
 
 ```python
-from pipeline.api import PipelineDataFrame
+from pipeline.api import read
 
-# Create DataFrame from paths
-df = PipelineDataFrame.from_paths(["s3://bucket/data/"])
+# Read data into DataFrame
+df = read("s3://bucket/data/")
 
 # Standard Python built-ins
 print(f"Rows: {len(df)}")  # Number of rows
@@ -79,9 +79,14 @@ first_10 = df[0:10]  # Slicing (like Pandas)
 selected = df[["col1", "col2"]]  # Multiple columns
 value = df.episode_id  # Attribute-style access
 
+# Pandas-style methods
+df.drop("unused_col")  # Drop columns (Pandas-style)
+df.to_parquet("output.parquet")  # Write to Parquet (Pandas-style)
+df.assign(status="active")  # Add columns (Pandas-style)
+
 # Operator overloading
-df1 = PipelineDataFrame.from_paths(["s3://bucket/data1/"])
-df2 = PipelineDataFrame.from_paths(["s3://bucket/data2/"])
+df1 = read("s3://bucket/data1/")
+df2 = read("s3://bucket/data2/")
 combined = df1 + df2  # Concatenate (like pd.concat)
 union = df1 | df2  # Alternative union syntax
 

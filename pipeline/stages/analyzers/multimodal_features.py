@@ -135,7 +135,7 @@ class MultimodalFeatureExtractor(ProcessorBase):
         Returns:
             Video features or None
         """
-        # Placeholder: Real implementation would use CLIP or video transformer
+        # Would use CLIP or video transformer in production
         # For now, return placeholder features
         if "video" not in item and "frames" not in item:
             return None
@@ -161,7 +161,7 @@ class MultimodalFeatureExtractor(ProcessorBase):
         if "sensor_data" not in item and "observations" not in item:
             return None
 
-        # Placeholder: Real implementation would use learned encoder
+        # Would use learned encoder in production
         # For now, return placeholder features
         logger.debug("Extracting sensor features using learned encoder")
         return None  # Placeholder
@@ -179,7 +179,7 @@ class MultimodalFeatureExtractor(ProcessorBase):
         if not text:
             return None
 
-        # Placeholder: Real implementation would use:
+        # Would use in production:
         # - NVIDIA NeMo for text embeddings
         # - Sentence transformers for general text
         # - GPU-accelerated feature extraction

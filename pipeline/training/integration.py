@@ -72,7 +72,7 @@ class TrainingPipelineIntegration:
             def assign_split_batch(batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 """Assign train/val split to batch.
                 
-                CRITICAL: Keep CPU-based for streaming compatibility.
+                # Keep CPU-based for streaming compatibility
                 GPU string operations require DataFrame conversion which adds overhead.
                 Hash computation is fast enough on CPU and preserves streaming execution.
                 """

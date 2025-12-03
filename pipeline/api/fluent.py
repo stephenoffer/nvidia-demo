@@ -111,26 +111,26 @@ class PipelineBuilder:
 
     Example:
         ```python
-        # Basic usage
-        pipeline = (
+        # Basic usage (short names)
+        p = (
             PipelineBuilder()
-            .add_source("video", "s3://bucket/videos/")
-            .add_source("mcap", "s3://bucket/rosbags/")
-            .add_stage(DataProfiler(profile_columns=["image"]))
-            .add_stage(BatchInferenceStage(model_uri="models:/model/Production"))
-            .set_output("s3://bucket/output/")
-            .enable_gpu()
+            .source("video", "s3://bucket/videos/")
+            .source("mcap", "s3://bucket/rosbags/")
+            .stage(DataProfiler(profile_columns=["image"]))
+            .stage(BatchInferenceStage(model_uri="models:/model/Production"))
+            .output("s3://bucket/output/")
+            .gpu()
             .build()
         )
         
-        # With convenience methods
-        pipeline = (
+        # With convenience methods (short names)
+        p = (
             PipelineBuilder()
-            .add_source("auto", "s3://bucket/data/")
-            .add_profiler(profile_columns=["image"], use_gpu=True)
-            .add_validator(expected_schema={"image": list})
-            .add_inference(model_uri="models:/model/Production")
-            .set_output("s3://bucket/output/")
+            .source("auto", "s3://bucket/data/")
+            .profile(profile_columns=["image"], use_gpu=True)
+            .validate(expected_schema={"image": list})
+            .infer(model_uri="models:/model/Production")
+            .output("s3://bucket/output/")
             .build()
         )
         ```
@@ -143,7 +143,7 @@ class PipelineBuilder:
         self.output_path: Optional[str] = None
         self.config: dict[str, Any] = {}
 
-    def add_source(
+    def source(
         self,
         source_type: str,
         path: str,
@@ -166,7 +166,7 @@ class PipelineBuilder:
         })
         return self
 
-    def add_stage(
+    def stage(
         self,
         stage: Union[PipelineStage, Callable],
         name: Optional[str] = None,
@@ -213,7 +213,7 @@ class PipelineBuilder:
         self.stages.append(stage)
         return self
 
-    def add_profiler(
+    def profile(
         self,
         profile_columns: Optional[list[str]] = None,
         use_gpu: bool = False,
@@ -229,7 +229,7 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
-        return self.add_stage(
+        return self.stage(
             DataProfiler(
                 profile_columns=profile_columns,
                 use_gpu=use_gpu,
@@ -238,7 +238,7 @@ class PipelineBuilder:
             name="data_profiler",
         )
 
-    def add_validator(
+    def validate(
         self,
         expected_schema: dict[str, Any],
         strict: bool = True,
@@ -254,7 +254,7 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
-        return self.add_stage(
+        return self.stage(
             SchemaValidator(
                 expected_schema=expected_schema,
                 strict=strict,
@@ -263,7 +263,7 @@ class PipelineBuilder:
             name="schema_validator",
         )
 
-    def add_inference(
+    def infer(
         self,
         model_uri: str,
         input_column: str = "data",
@@ -281,7 +281,7 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
-        return self.add_stage(
+        return self.stage(
             BatchInferenceStage(
                 model_uri=model_uri,
                 input_column=input_column,
@@ -291,7 +291,7 @@ class PipelineBuilder:
             name="batch_inference",
         )
 
-    def add_drift_detector(
+    def drift(
         self,
         reference_statistics: dict[str, Any],
         drift_threshold: float = 0.1,
@@ -307,7 +307,7 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
-        return self.add_stage(
+        return self.stage(
             DriftDetector(
                 reference_statistics=reference_statistics,
                 drift_threshold=drift_threshold,
@@ -316,7 +316,7 @@ class PipelineBuilder:
             name="drift_detector",
         )
 
-    def add_feature_engineering(
+    def features(
         self,
         feature_functions: dict[str, Callable],
         **kwargs: Any,
@@ -330,7 +330,7 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
-        return self.add_stage(
+        return self.stage(
             FeatureEngineeringStage(
                 feature_functions=feature_functions,
                 **kwargs,
@@ -338,7 +338,7 @@ class PipelineBuilder:
             name="feature_engineering",
         )
     
-    def add_transformer(
+    def transform(
         self,
         transform_func: Callable,
         **kwargs: Any,
@@ -352,7 +352,7 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
-        return self.add_stage(
+        return self.stage(
             DataTransformer(
                 transform_func=transform_func,
                 **kwargs,
@@ -360,7 +360,7 @@ class PipelineBuilder:
             name="data_transformer",
         )
     
-    def add_aggregator(
+    def aggregate(
         self,
         group_by: list[str],
         aggregations: dict[str, str],
@@ -376,7 +376,7 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
-        return self.add_stage(
+        return self.stage(
             DataAggregator(
                 group_by=group_by,
                 aggregations=aggregations,
@@ -385,7 +385,7 @@ class PipelineBuilder:
             name="data_aggregator",
         )
     
-    def add_isaac_lab(
+    def isaac(
         self,
         simulation_path: str,
         robot_type: str = "humanoid",
@@ -414,7 +414,7 @@ class PipelineBuilder:
         )
         
         # Add as source
-        return self.add_source(
+        return self.source(
             "isaac_lab",
             simulation_path,
             robot_type=robot_type,
@@ -422,7 +422,7 @@ class PipelineBuilder:
             **kwargs,
         )
     
-    def add_omniverse(
+    def omniverse(
         self,
         omniverse_path: str,
         use_replicator: bool = False,
@@ -450,7 +450,7 @@ class PipelineBuilder:
             **kwargs,
         )
         
-        return self.add_source(
+        return self.source(
             "omniverse",
             omniverse_path,
             use_replicator=use_replicator,
@@ -458,7 +458,7 @@ class PipelineBuilder:
             **kwargs,
         )
     
-    def add_cosmos_dreams(
+    def cosmos(
         self,
         dreams_path: str,
         model_name: str = "groot-dreams-v1",
@@ -474,14 +474,14 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
-        return self.add_source(
+        return self.source(
             "cosmos_dreams",
             dreams_path,
             model_name=model_name,
             **kwargs,
         )
 
-    def set_output(self, output_path: str) -> PipelineBuilder:
+    def output(self, output_path: str) -> PipelineBuilder:
         """Set pipeline output path.
 
         Args:
@@ -490,10 +490,12 @@ class PipelineBuilder:
         Returns:
             Self for method chaining
         """
+        if not isinstance(output_path, str) or not output_path.strip():
+            raise ValueError(f"output_path must be a non-empty string, got {type(output_path).__name__}: {output_path}")
         self.output_path = output_path
         return self
 
-    def enable_gpu(self, num_gpus: int = 1) -> PipelineBuilder:
+    def gpu(self, num_gpus: int = 1) -> PipelineBuilder:
         """Enable GPU acceleration.
 
         Args:
@@ -512,8 +514,8 @@ class PipelineBuilder:
         self.config["num_gpus"] = num_gpus
         return self
     
-    def disable_gpu(self) -> PipelineBuilder:
-        """Disable GPU acceleration.
+    def cpu(self) -> PipelineBuilder:
+        """Use CPU only (disable GPU).
 
         Returns:
             Self for method chaining
@@ -521,8 +523,8 @@ class PipelineBuilder:
         self.config["enable_gpu"] = False
         self.config["num_gpus"] = 0
         return self
-
-    def set_batch_size(self, batch_size: int) -> PipelineBuilder:
+    
+    def batch(self, batch_size: int) -> PipelineBuilder:
         """Set default batch size.
 
         Args:
@@ -540,25 +542,19 @@ class PipelineBuilder:
         self.config["batch_size"] = batch_size
         return self
     
-    def enable_streaming(self) -> PipelineBuilder:
-        """Enable streaming execution mode.
+    def streaming(self, enabled: bool = True) -> PipelineBuilder:
+        """Enable or disable streaming execution mode.
+
+        Args:
+            enabled: Whether to enable streaming
 
         Returns:
             Self for method chaining
         """
-        self.config["streaming"] = True
+        self.config["streaming"] = enabled
         return self
     
-    def disable_streaming(self) -> PipelineBuilder:
-        """Disable streaming execution mode.
-
-        Returns:
-            Self for method chaining
-        """
-        self.config["streaming"] = False
-        return self
-    
-    def enable_gpu_object_store(self) -> PipelineBuilder:
+    def gpu_store(self) -> PipelineBuilder:
         """Enable GPU object store for RDMA transfers.
 
         Returns:
@@ -566,10 +562,10 @@ class PipelineBuilder:
         """
         self.config["use_gpu_object_store"] = True
         if not self.config.get("enable_gpu", False):
-            self.enable_gpu()
+            self.gpu()
         return self
     
-    def set_checkpoint_interval(self, interval: int) -> PipelineBuilder:
+    def checkpoint(self, interval: int) -> PipelineBuilder:
         """Set checkpoint interval for fault tolerance.
 
         Args:
@@ -584,7 +580,7 @@ class PipelineBuilder:
         self.config["checkpoint_interval"] = interval
         return self
     
-    def set_dedup_method(
+    def dedup(
         self,
         method: str = "fuzzy",
         similarity_threshold: float = 0.95,
@@ -608,7 +604,7 @@ class PipelineBuilder:
         self.config["similarity_threshold"] = similarity_threshold
         return self
 
-    def configure(self, **kwargs: Any) -> PipelineBuilder:
+    def config(self, **kwargs: Any) -> PipelineBuilder:
         """Set additional configuration.
 
         Args:
@@ -632,12 +628,12 @@ class PipelineBuilder:
         if not self.sources:
             raise ValueError(
                 "At least one source must be added. "
-                "Use .add_source() or convenience methods like .add_isaac_lab()"
+                "Use .source() or convenience methods like .isaac()"
             )
         
         if not self.output_path:
             raise ValueError(
-                "Output path must be set. Use .set_output(path) to specify output location."
+                "Output path must be set. Use .output(path) to specify output location."
             )
         
         if not isinstance(self.output_path, str) or not self.output_path.strip():
@@ -650,7 +646,7 @@ class PipelineBuilder:
             if not isinstance(source, dict):
                 raise ValueError(
                     f"Source {i} must be a dict, got {type(source).__name__}. "
-                    f"Use .add_source() or convenience methods like .add_isaac_lab()"
+                    f"Use .source() or convenience methods like .isaac()"
                 )
             if "type" not in source or "path" not in source:
                 raise ValueError(
@@ -668,7 +664,7 @@ class PipelineBuilder:
             if not isinstance(stage, PipelineStage):
                 raise ValueError(
                     f"Stage {i} must be a PipelineStage instance, got {type(stage).__name__}. "
-                    f"Use .add_stage() or convenience methods like .add_profiler()"
+                    f"Use .stage() or convenience methods like .profile()"
                 )
 
         from pipeline.api.declarative import Pipeline
@@ -682,7 +678,7 @@ class PipelineBuilder:
 
             # Add custom stages
             for stage in self.stages:
-                pipeline.pipeline.add_stage(stage)
+                pipeline.pipeline.stage(stage)
 
             return pipeline
         except Exception as e:
@@ -700,7 +696,7 @@ class PipelineBuilder:
         Example:
             ```python
             with PipelineBuilder() as builder:
-                builder.add_source("video", "s3://bucket/videos/")
+                builder.source("video", "s3://bucket/videos/")
                 pipeline = builder.build()
             ```
         """
@@ -736,7 +732,7 @@ class PipelineBuilder:
             
         Example:
             ```python
-            builder = PipelineBuilder().add_source(...).add_profiler(...)
+            builder = PipelineBuilder().source(...).profile(...)
             num_stages = len(builder)  # Standard Python len() support
             ```
         """
@@ -750,7 +746,7 @@ class PipelineBuilder:
             
         Example:
             ```python
-            builder = PipelineBuilder().add_source(...).add_profiler(...)
+            builder = PipelineBuilder().source(...).profile(...)
             for stage in builder:  # Standard Python iteration
                 print(stage.name)
             ```
@@ -783,7 +779,7 @@ class PipelineBuilder:
             
         Example:
             ```python
-            builder = PipelineBuilder().add_profiler(...)
+            builder = PipelineBuilder().profile(...)
             if "data_profiler" in builder:  # Check if stage exists
                 print("Profiler found")
             ```

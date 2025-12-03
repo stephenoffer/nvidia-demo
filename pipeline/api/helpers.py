@@ -18,20 +18,22 @@ from pipeline.api.fluent import PipelineBuilder
 logger = logging.getLogger(__name__)
 
 
-def quick_start(
-    input_paths: Union[str, list[str]],
-    output_path: str,
+def pipeline(
+    sources: Union[str, list[str], list[dict[str, Any]]],
+    output: str,
     enable_gpu: bool = False,
+    num_gpus: int = 0,
     **kwargs: Any,
 ) -> Pipeline:
-    """Quick start function for simple pipeline creation.
+    """Create a pipeline from data sources.
 
-    Creates a pipeline with minimal configuration for common use cases.
+    Short, intuitive function for creating pipelines.
 
     Args:
-        input_paths: Single path or list of input paths
-        output_path: Output path for processed data
+        sources: Single path (str), list of paths (List[str]), or list of source configs
+        output: Output path for processed data
         enable_gpu: Enable GPU acceleration
+        num_gpus: Number of GPUs to use
         **kwargs: Additional pipeline configuration
 
     Returns:
@@ -39,44 +41,40 @@ def quick_start(
 
     Example:
         ```python
-        from pipeline.api import quick_start
+        from pipeline.api import pipeline
 
         # Simple pipeline
-        pipeline = quick_start(
-            input_paths="s3://bucket/data/",
-            output_path="s3://bucket/output/",
+        p = pipeline(
+            sources="s3://bucket/data/",
+            output="s3://bucket/output/",
         )
-        results = pipeline.run()
+        results = p.run()
 
         # With GPU
-        pipeline = quick_start(
-            input_paths=["s3://bucket/videos/", "s3://bucket/rosbags/"],
-            output_path="s3://bucket/output/",
-            enable_gpu=True,
+        p = pipeline(
+            sources=["s3://bucket/videos/", "s3://bucket/rosbags/"],
+            output="s3://bucket/output/",
+            num_gpus=4,
         )
-        results = pipeline.run()
+        results = p.run()
         ```
     """
-    if isinstance(input_paths, str):
-        input_paths = [input_paths]
-    
-    sources = [{"type": "auto", "path": path} for path in input_paths]
-    
-    return Pipeline(
+    return Pipeline.create(
         sources=sources,
-        output=output_path,
+        output=output,
         enable_gpu=enable_gpu,
+        num_gpus=num_gpus,
         **kwargs,
     )
 
 
-def dataframe_from_paths(
+def read(
     paths: Union[str, list[str]],
     **read_kwargs: Any,
 ) -> PipelineDataFrame:
-    """Convenience function to create DataFrame from paths.
+    """Read data into a DataFrame.
 
-    Alias for PipelineDataFrame.from_paths() for easier imports.
+    Short alias for PipelineDataFrame.from_paths().
 
     Args:
         paths: Single path or list of paths
@@ -87,9 +85,9 @@ def dataframe_from_paths(
 
     Example:
         ```python
-        from pipeline.api import dataframe_from_paths
+        from pipeline.api import read
 
-        df = dataframe_from_paths("s3://bucket/data/")
+        df = read("s3://bucket/data/")
         results = df.filter(lambda x: x["quality"] > 0.8).collect()
         ```
     """
@@ -97,29 +95,18 @@ def dataframe_from_paths(
 
 
 def dataframe_from_dataset(dataset: Dataset) -> PipelineDataFrame:
-    """Convenience function to create DataFrame from Ray Dataset.
-
-    Alias for PipelineDataFrame.from_dataset() for easier imports.
+    """Create DataFrame from Ray Dataset.
 
     Args:
         dataset: Ray Data Dataset
 
     Returns:
         PipelineDataFrame instance
-
-    Example:
-        ```python
-        import ray.data
-        from pipeline.api import dataframe_from_dataset
-
-        ds = ray.data.read_parquet("s3://bucket/data/")
-        df = dataframe_from_dataset(ds)
-        ```
     """
     return PipelineDataFrame.from_dataset(dataset)
 
 
-def create_simple_pipeline(
+def simple(
     input_path: str,
     output_path: str,
     stages: Optional[list[Callable]] = None,
@@ -138,12 +125,12 @@ def create_simple_pipeline(
 
     Example:
         ```python
-        from pipeline.api import create_simple_pipeline
+        from pipeline.api import simple
 
         def custom_filter(batch):
             return {k: v for k, v in batch.items() if v is not None}
 
-        pipeline = create_simple_pipeline(
+        pipeline = simple(
             input_path="s3://bucket/data/",
             output_path="s3://bucket/output/",
             stages=[custom_filter],
@@ -153,18 +140,18 @@ def create_simple_pipeline(
     """
     builder = (
         PipelineBuilder()
-        .add_source("auto", input_path)
-        .set_output(output_path)
+        .source("auto", input_path)
+        .output(output_path)
     )
     
     if stages:
         for stage in stages:
-            builder.add_stage(stage)
+            builder.stage(stage)
     
-    return builder.build()
+        return builder.build()
 
 
-def create_inference_pipeline(
+def infer(
     input_path: str,
     output_path: str,
     model_uri: str,
@@ -187,9 +174,9 @@ def create_inference_pipeline(
 
     Example:
         ```python
-        from pipeline.api import create_inference_pipeline
+        from pipeline.api import infer
 
-        pipeline = create_inference_pipeline(
+        pipeline = infer(
             input_path="s3://bucket/inference_data/",
             output_path="s3://bucket/predictions/",
             model_uri="models:/groot-model/Production",
@@ -201,20 +188,20 @@ def create_inference_pipeline(
     """
     return (
         PipelineBuilder()
-        .add_source("auto", input_path)
-        .add_inference(
+        .source("auto", input_path)
+        .infer(
             model_uri=model_uri,
             input_column=input_column,
             use_tensorrt=kwargs.pop("use_tensorrt", False),
             **kwargs,
         )
-        .set_output(output_path)
-        .enable_gpu(num_gpus=kwargs.pop("num_gpus", 1) if use_gpu else 0)
+        .output(output_path)
+        .gpu(num_gpus=kwargs.pop("num_gpus", 1) if use_gpu else 0)
         .build()
     )
 
 
-def create_profiling_pipeline(
+def profile(
     input_path: str,
     output_path: str,
     profile_columns: Optional[list[str]] = None,
@@ -235,9 +222,9 @@ def create_profiling_pipeline(
 
     Example:
         ```python
-        from pipeline.api import create_profiling_pipeline
+        from pipeline.api import profile
 
-        pipeline = create_profiling_pipeline(
+        pipeline = profile(
             input_path="s3://bucket/data/",
             output_path="s3://bucket/profiled/",
             profile_columns=["image", "sensor_data"],
@@ -248,24 +235,24 @@ def create_profiling_pipeline(
     """
     return (
         PipelineBuilder()
-        .add_source("auto", input_path)
-        .add_profiler(
+        .source("auto", input_path)
+        .profile(
             profile_columns=profile_columns,
             use_gpu=use_gpu,
             **kwargs,
         )
-        .set_output(output_path)
-        .enable_gpu(num_gpus=kwargs.pop("num_gpus", 1) if use_gpu else 0)
+        .output(output_path)
+        .gpu(num_gpus=kwargs.pop("num_gpus", 1) if use_gpu else 0)
         .build()
     )
 
 
-def convert_dataframe_to_pipeline(
+def to_pipeline(
     df: PipelineDataFrame,
     output_path: str,
     **kwargs: Any,
 ) -> Pipeline:
-    """Convert a DataFrame to a Pipeline for further processing.
+    """Convert a DataFrame to a Pipeline.
 
     Args:
         df: PipelineDataFrame instance
@@ -275,23 +262,15 @@ def convert_dataframe_to_pipeline(
     Returns:
         Pipeline instance configured with DataFrame as source
 
-    Note:
-        This function writes the DataFrame to a temporary location and creates
-        a pipeline that reads from it. For better performance, consider using
-        the DataFrame API directly or checkpointing the DataFrame first.
-
     Example:
         ```python
-        from pipeline.api import dataframe_from_paths, convert_dataframe_to_pipeline
+        from pipeline.api import read, to_pipeline
 
-        df = dataframe_from_paths("s3://bucket/data/")
+        df = read("s3://bucket/data/")
         filtered_df = df.filter(lambda x: x["quality"] > 0.8)
 
-        # Convert to pipeline for further processing
-        pipeline = convert_dataframe_to_pipeline(
-            filtered_df,
-            output_path="s3://bucket/output/",
-        )
+        # Convert to pipeline
+        pipeline = to_pipeline(filtered_df, output_path="s3://bucket/output/")
         results = pipeline.run()
         ```
     """
@@ -307,9 +286,9 @@ def convert_dataframe_to_pipeline(
         df.write_parquet(temp_path)
         
         # Create pipeline that reads from checkpoint
-        return Pipeline.quick_start(
-            input_paths=temp_path,
-            output_path=output_path,
+        return Pipeline.create(
+            sources=temp_path,
+            output=output_path,
             **kwargs,
         )
     except Exception as e:
@@ -317,7 +296,7 @@ def convert_dataframe_to_pipeline(
         raise
 
 
-def create_validation_pipeline(
+def validate(
     input_path: str,
     output_path: str,
     expected_schema: dict[str, Any],
@@ -338,9 +317,9 @@ def create_validation_pipeline(
 
     Example:
         ```python
-        from pipeline.api import create_validation_pipeline
+        from pipeline.api import validate
 
-        pipeline = create_validation_pipeline(
+        pipeline = validate(
             input_path="s3://bucket/data/",
             output_path="s3://bucket/validated/",
             expected_schema={
@@ -355,18 +334,18 @@ def create_validation_pipeline(
     """
     return (
         PipelineBuilder()
-        .add_source("auto", input_path)
-        .add_validator(
+        .source("auto", input_path)
+        .validate(
             expected_schema=expected_schema,
             strict=strict,
             **kwargs,
         )
-        .set_output(output_path)
+        .output(output_path)
         .build()
     )
 
 
-def create_isaac_lab_pipeline(
+def isaac(
     simulation_path: str,
     output_path: str,
     robot_type: str = "humanoid",
@@ -374,8 +353,6 @@ def create_isaac_lab_pipeline(
     **kwargs: Any,
 ) -> Pipeline:
     """Create a pipeline for Isaac Lab simulation data.
-
-    Convenience function for processing Isaac Lab simulation trajectories.
 
     Args:
         simulation_path: Path to Isaac Lab simulation data
@@ -389,9 +366,9 @@ def create_isaac_lab_pipeline(
 
     Example:
         ```python
-        from pipeline.api import create_isaac_lab_pipeline
+        from pipeline.api import isaac
 
-        pipeline = create_isaac_lab_pipeline(
+        pipeline = isaac(
             simulation_path="s3://bucket/isaac_lab/",
             output_path="s3://bucket/curated/",
             robot_type="humanoid",
@@ -402,19 +379,19 @@ def create_isaac_lab_pipeline(
     """
     return (
         PipelineBuilder()
-        .add_isaac_lab(
+        .isaac(
             simulation_path=simulation_path,
             robot_type=robot_type,
             use_gpu=use_gpu,
             **kwargs,
         )
-        .set_output(output_path)
-        .enable_gpu(num_gpus=kwargs.pop("num_gpus", 1) if use_gpu else 0)
+        .output(output_path)
+        .gpu(num_gpus=kwargs.pop("num_gpus", 1) if use_gpu else 0)
         .build()
     )
 
 
-def create_omniverse_pipeline(
+def omniverse(
     omniverse_path: str,
     output_path: str,
     use_replicator: bool = False,
@@ -422,8 +399,6 @@ def create_omniverse_pipeline(
     **kwargs: Any,
 ) -> Pipeline:
     """Create a pipeline for Omniverse USD/Replicator data.
-
-    Convenience function for processing Omniverse scenes and Replicator outputs.
 
     Args:
         omniverse_path: Path to Omniverse USD files or Replicator output
@@ -437,9 +412,9 @@ def create_omniverse_pipeline(
 
     Example:
         ```python
-        from pipeline.api import create_omniverse_pipeline
+        from pipeline.api import omniverse
 
-        pipeline = create_omniverse_pipeline(
+        pipeline = omniverse(
             omniverse_path="s3://bucket/omniverse/",
             output_path="s3://bucket/curated/",
             use_replicator=True,
@@ -450,27 +425,25 @@ def create_omniverse_pipeline(
     """
     return (
         PipelineBuilder()
-        .add_omniverse(
+        .omniverse(
             omniverse_path=omniverse_path,
             use_replicator=use_replicator,
             use_gpu=use_gpu,
             **kwargs,
         )
-        .set_output(output_path)
-        .enable_gpu(num_gpus=kwargs.pop("num_gpus", 1) if use_gpu else 0)
+        .output(output_path)
+        .gpu(num_gpus=kwargs.pop("num_gpus", 1) if use_gpu else 0)
         .build()
     )
 
 
-def create_cosmos_dreams_pipeline(
+def cosmos(
     dreams_path: str,
     output_path: str,
     model_name: str = "groot-dreams-v1",
     **kwargs: Any,
 ) -> Pipeline:
     """Create a pipeline for Cosmos Dreams synthetic video data.
-
-    Convenience function for processing GR00T Dreams synthetic videos.
 
     Args:
         dreams_path: Path to Cosmos Dreams output
@@ -483,9 +456,9 @@ def create_cosmos_dreams_pipeline(
 
     Example:
         ```python
-        from pipeline.api import create_cosmos_dreams_pipeline
+        from pipeline.api import cosmos
 
-        pipeline = create_cosmos_dreams_pipeline(
+        pipeline = cosmos(
             dreams_path="s3://bucket/cosmos_dreams/",
             output_path="s3://bucket/curated/",
             model_name="groot-dreams-v1",
@@ -495,12 +468,12 @@ def create_cosmos_dreams_pipeline(
     """
     return (
         PipelineBuilder()
-        .add_cosmos_dreams(
+        .cosmos(
             dreams_path=dreams_path,
             model_name=model_name,
             **kwargs,
         )
-        .set_output(output_path)
+        .output(output_path)
         .build()
     )
 

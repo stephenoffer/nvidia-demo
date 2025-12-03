@@ -19,7 +19,7 @@ from pipeline.visualization.renderer import SimulationRenderer
 logger = logging.getLogger(__name__)
 
 
-# CRITICAL: Fractional GPU allocation (0.1) may not work correctly in all Ray versions
+# Fractional GPU allocation (0.1) may not work correctly in all Ray versions
 # Ray's fractional GPU support is experimental and may cause resource allocation issues
 # Use integer GPU allocation (1) or verify fractional GPU support in your Ray version
 @ray.remote(num_gpus=1, num_cpus=2, memory=2 * 1024 * 1024 * 1024)  # 2GB memory limit

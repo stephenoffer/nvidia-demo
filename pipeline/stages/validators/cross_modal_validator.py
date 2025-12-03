@@ -211,7 +211,7 @@ class CrossModalValidator(ValidatorBase):
         """
         violations = []
 
-        # Placeholder: Would use learned models to check consistency
+        # Would use learned models to check consistency in production
         # For example:
         # - Video-text: Use CLIP to check if text describes video
         # - Sensor-text: Use learned encoders to check if text describes sensor state

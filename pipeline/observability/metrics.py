@@ -21,6 +21,9 @@ class StageMetrics:
     per_modality_metrics: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     gpu_utilization: float = 0.0
     memory_usage: float = 0.0
+    cpu_percent: float = 0.0
+    memory_percent: float = 0.0
+    resource_metrics: Optional[Dict[str, Any]] = None  # Detailed resource metrics from psutil
 
     @property
     def duration(self) -> float:
@@ -152,6 +155,9 @@ class PipelineMetrics:
                     items_processed=prev_stage.items_processed,
                     items_filtered=prev_stage.items_filtered,
                     errors=len(prev_stage.errors),
+                    cpu_percent=getattr(prev_stage, 'cpu_percent', None),
+                    memory_percent=getattr(prev_stage, 'memory_percent', None),
+                    memory_used_mb=getattr(prev_stage, 'memory_usage', None),
                 )
 
             # Export to MLflow

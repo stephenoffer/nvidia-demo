@@ -158,7 +158,7 @@ class DataShardingStage(ProcessorBase):
     def get_shard_statistics(self, dataset: Dataset) -> dict[str, Any]:
         """Get statistics about shard distribution.
 
-        CRITICAL: Use CPU-based sampling to avoid materialization.
+        # Use CPU-based sampling to avoid materialization
         Statistics collection should not break streaming execution.
 
         Args:

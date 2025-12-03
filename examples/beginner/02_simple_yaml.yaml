@@ -12,7 +12,7 @@ sources:
 output: "./output/curated"
 
 # Basic settings
-enable_gpu: false
+num_gpus: 0
 num_cpus: 2
 batch_size: 100
 

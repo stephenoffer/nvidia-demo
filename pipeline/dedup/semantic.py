@@ -40,8 +40,7 @@ class SemanticGPUWorker:
 
         if torch.cuda.is_available():
             try:
-                # CRITICAL: Ray manages GPU assignment via num_gpus in @ray.remote decorator
-                # CUDA_VISIBLE_DEVICES is set by Ray to limit visible devices per actor
+                # Ray manages GPU assignment via num_gpus in @ray.remote decorator
                 # When Ray sets CUDA_VISIBLE_DEVICES="0", device 0 in the actor's view is actually
                 # the GPU assigned by Ray. We should use device 0 (the first visible device).
                 # Do NOT parse CUDA_VISIBLE_DEVICES - Ray handles device assignment.
@@ -50,8 +49,7 @@ class SemanticGPUWorker:
                 
                 self.device = torch.device(f"cuda:{device_id}")
                 torch.cuda.set_device(device_id)
-                # CRITICAL: Device is already set by get_cuda_device() above
-                # Verify device is correct
+                # Device is already set by get_cuda_device() above
                 if torch.cuda.current_device() != device_id:
                     torch.cuda.set_device(device_id)
                 logger.info(f"Semantic worker using CUDA device {device_id}: {torch.cuda.get_device_name(device_id)}")
@@ -163,8 +161,7 @@ class SemanticGPUWorker:
                     embeddings.append(embedding)
 
                 result = torch.stack(embeddings).to(self.device, non_blocking=True)
-                # CRITICAL: Synchronize after non-blocking transfer to ensure completion
-                # Then check for CUDA errors before proceeding
+                # Synchronize after transfer to ensure completion
                 if self.device.type == "cuda":
                     torch.cuda.synchronize()
                     # Check for CUDA errors after synchronization
@@ -198,8 +195,7 @@ class SemanticGPUWorker:
         try:
             import cupy as cp  # https://docs.cupy.dev/
 
-            # CRITICAL: Set cuPy device context explicitly before operations
-            # cuPy operations must be within device context for proper GPU assignment
+            # Set cuPy device context - operations must be within device context
             device_id = self.device.index if self.device.index is not None else 0
             cp.cuda.Device(device_id).use()
             with cp.cuda.Device(device_id):
@@ -236,8 +232,7 @@ class SemanticGPUWorker:
         """
         from pipeline.utils.gpu.memory import gpu_memory_cleanup
 
-        # CRITICAL: Ensure embeddings are on correct device before operations
-        # Use non-blocking transfer for performance, but synchronize after
+        # Ensure embeddings are on correct device
         if not embeddings.is_cuda and self.device.type == "cuda":
             embeddings = embeddings.to(self.device, non_blocking=True)
             torch.cuda.synchronize()  # Ensure transfer completes before operations
@@ -250,8 +245,7 @@ class SemanticGPUWorker:
                     import cupy as cp  # https://docs.cupy.dev/
 
                     # Convert torch tensor to cupy array (zero-copy if possible)
-                    # CRITICAL: Set cuPy device context explicitly before operations
-                    # cuPy operations must be within device context for proper GPU assignment
+                # Set cuPy device context before operations
                     device_id = self.device.index if self.device.index is not None else 0
                     # Ensure cuPy is using the correct device
                     cp.cuda.Device(device_id).use()
@@ -372,8 +366,7 @@ class SemanticGPUWorker:
             except ray.exceptions.GetTimeoutError:
                 raise RuntimeError("Timeout getting clusters") from None
 
-        # CRITICAL: Ensure tensors are on correct device before operations
-        # Use non-blocking transfers for performance, but synchronize after all transfers
+        # Ensure tensors are on correct device
         if not embeddings.is_cuda and self.device.type == "cuda":
             embeddings = embeddings.to(self.device, non_blocking=True)
         elif embeddings.device != self.device:
@@ -384,8 +377,7 @@ class SemanticGPUWorker:
         elif clusters.device != self.device:
             clusters = clusters.to(self.device, non_blocking=True)
 
-        # CRITICAL: Synchronize after all non-blocking transfers to ensure completion
-        # This ensures all data is on GPU before operations begin
+        # Synchronize after transfers to ensure completion
         if self.device.type == "cuda":
             torch.cuda.synchronize()
             # Check for CUDA errors after synchronization
@@ -419,8 +411,7 @@ class SemanticGPUWorker:
                 similarities_cpu = similarities.cpu()
                 del similarities, cluster_embeddings  # Free GPU memory immediately
 
-                # CRITICAL: Batch process similarities on CPU to avoid repeated .item() calls
-                # .item() synchronizes GPU-CPU, so batch all comparisons first
+                # Batch process similarities on CPU to avoid repeated .item() calls
                 # Convert to numpy array once for efficient CPU-side comparison
                 similarities_np = similarities_cpu.numpy()
                 for i in range(len(cluster_indices)):

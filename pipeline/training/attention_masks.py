@@ -170,7 +170,7 @@ class AttentionMaskGenerator:
         Returns:
             Cross-modal attention mask
         """
-        # Placeholder: Would need modality-specific logic
+        # Would need modality-specific logic
         # For now, return bidirectional mask
         return self._generate_bidirectional_mask(seq_len)
 

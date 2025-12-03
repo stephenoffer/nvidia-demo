@@ -32,8 +32,8 @@ def gpu_join_operator(
 ) -> pd.DataFrame:
     """GPU-accelerated join operator for batch-level joins.
 
-    CRITICAL: This function operates on INDIVIDUAL BATCHES only. It does NOT perform
-    global joins across entire datasets. For global joins between datasets, ALWAYS use
+    This function operates on individual batches only. It does not perform
+    global joins across entire datasets. For global joins between datasets, always use
     Ray Data's native join() function:
     
     ```python
@@ -47,7 +47,7 @@ def gpu_join_operator(
     # This function is only for batch-level joins within map_batches()
     ```
 
-    IMPORTANT: When calling this function via dataset.map_batches(), you MUST specify
+    When calling this function via dataset.map_batches(), you must specify
     batch_format="pandas". Note: Ray Data's native join() is preferred for streaming
     operations as it handles streaming correctly without materialization.
 
@@ -66,16 +66,16 @@ def gpu_join_operator(
     Returns:
         Joined DataFrame
     """
-    # CRITICAL: Validate num_gpus parameter
+    # Validate num_gpus parameter
     if num_gpus < 0:
         raise ValueError(f"num_gpus must be >= 0, got {num_gpus}")
 
-    # CRITICAL: Validate join type
+    # Validate join type
     valid_join_types = {"inner", "left", "right", "outer"}
     if how not in valid_join_types:
         raise ValueError(f"Invalid join type '{how}'. Must be one of {valid_join_types}")
 
-    # CRITICAL: Validate join keys are specified
+    # Validate join keys are specified
     if on is None and left_on is None and right_on is None:
         raise ValueError("Must specify at least one of: 'on', 'left_on'/'right_on'")
 
@@ -87,7 +87,7 @@ def gpu_join_operator(
     right_gdf = None
     result_gdf = None
     try:
-        # CRITICAL: Try zero-copy conversion first for performance
+        # Try zero-copy conversion first for performance
         try:
             left_gdf = cudf.DataFrame.from_pandas(left_batch, allow_copy=False)
             right_gdf = cudf.DataFrame.from_pandas(right_batch, allow_copy=False)
@@ -96,7 +96,7 @@ def gpu_join_operator(
             left_gdf = cudf.DataFrame.from_pandas(left_batch, allow_copy=True)
             right_gdf = cudf.DataFrame.from_pandas(right_batch, allow_copy=True)
 
-        # CRITICAL: Validate join keys exist in DataFrames before merge
+        # Validate join keys exist in DataFrames before merge
         if on is not None:
             if isinstance(on, str):
                 on_list = [on]
@@ -136,10 +136,10 @@ def gpu_join_operator(
             how=how,
         )
 
-        # CRITICAL: Convert back to pandas for Ray Data compatibility
+        # Convert back to pandas for Ray Data compatibility
         result_pd = result_gdf.to_pandas()
         
-        # CRITICAL: Validate pandas conversion succeeded
+        # Validate pandas conversion succeeded
         if not isinstance(result_pd, pd.DataFrame):
             raise RuntimeError(f"cuDF to_pandas() returned non-DataFrame: {type(result_pd)}")
         

@@ -206,9 +206,6 @@ class InstructionGroundingStage(ProcessorBase):
     ) -> float:
         """Validate instruction-trajectory alignment.
 
-        Placeholder: Would use learned models (e.g., CLIP, learned encoders)
-        to check if instruction describes trajectory.
-
         Args:
             instruction: Instruction text
             trajectory: Trajectory data
@@ -216,7 +213,7 @@ class InstructionGroundingStage(ProcessorBase):
         Returns:
             Alignment score (0.0-1.0)
         """
-        # Placeholder: Real implementation would use learned models
+        # Would use learned models (e.g., CLIP) in production
         # For now, return a basic score based on trajectory completeness
         if not trajectory:
             return 0.0
